@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
+#include <string.h>
 
 typedef short bool;
 #define true 1
@@ -64,4 +65,45 @@ void destroyClk(bool terminateAll)
     {
         killpg(getpgrp(), SIGINT);
     }
+}
+
+
+//Process struct
+
+struct Process {
+    int PID;
+    int ArrivalTime; 
+    int Runtime;   
+    int Priority;
+    int DependencyID;
+    int RemainingTime;
+};
+
+
+//MQ Structs
+
+struct AlgorithmMsg {
+    long mtype;         
+    char mtext[20];       
+};
+
+struct ProcessMsg {
+    long mtype;         
+    struct Process process;
+};
+
+
+
+//Linked List DS definition
+
+struct Node {    
+    struct Process P;
+    struct Node* next;
+};
+
+void printLinkedlist(struct Node *p) {
+  while (p != NULL) {
+    printf("%d ", p->P.PID);
+    p = p->next;
+  }
 }
