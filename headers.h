@@ -1,3 +1,6 @@
+#ifndef HEADERS_H
+#define HEADERS_H
+
 #include <stdio.h>      //if you don't use scanf/printf change this include
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -107,3 +110,61 @@ void printLinkedlist(struct Node *p) {
     p = p->next;
   }
 }
+
+//enum for process state
+typedef enum {READY, RUNNING, FINISHED } proc_state;
+
+//pcb struct
+struct PCB {
+    int id;            
+    pid_t pid;         
+    int arrival_time;  
+    int burst_time;       //runtime
+    int remaining_time;
+    int start_time;    
+    int finish_time;   
+    int last_start_time;
+    int waiting_time;  
+    proc_state state;  //one of the enums 0,1,2
+};
+
+/////enqueue and dequeue priority queue for strn
+
+bool enqueueSTRN(struct Node** head, struct Process p)
+{
+    struct Node* newNode = malloc(sizeof(struct Node));  //dynamically allocate space to node
+    if (!newNode) return false;
+
+    newNode->P = p;
+    newNode->next = NULL;
+
+    if (*head == NULL || p.RemainingTime < (*head)->P.RemainingTime)  //if process remaining time is shortest than                                                                 
+    {                                                                 //head or no head
+        newNode->next = *head;
+        *head = newNode;
+        return true;
+    }
+
+    struct Node* cur = *head;
+    while (cur->next != NULL && cur->next->P.RemainingTime <= p.RemainingTime)  //loop until remainig time is less than next
+        cur = cur->next;
+
+    newNode->next = cur->next;
+    cur->next = newNode;
+    return true;
+}
+
+bool dequeue(struct Node** head, struct Process* out)   
+{
+    if (*head == NULL) return false;
+
+    struct Node* temp = *head;
+    *out = temp->P;
+
+    *head = (*head)->next;
+    free(temp);
+    return true;
+}
+
+
+#endif
