@@ -154,11 +154,13 @@ int main(int argc, char * argv[])
 
 
     //****mariam******* */
+    //ready queue -> queues from ds
     //1-Implement Shortest Remaining Time Next (SRTN) (preemptive shortest remaining time).
 
     //2- Implement process start: fork + exec (give child its params).
 
     //3- Implement process switch: stop old process (SIGSTOP), save state (PCB fields), resume new (SIGCONT).
+    //take input to see which process to run
 
     //4- Maintain PCB for each process (state, remaining, arrival, start/finish times, pid, wait times, WTA/TA).
 
