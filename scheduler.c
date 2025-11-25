@@ -13,8 +13,8 @@ int process_count = 0;
 int msgid;
 
 
-// Updates the master list's PID from Virtual ID to OS PID (Called after fork)
-void update_master_list_pid(int virt_id, int os_pid, int start_time) {
+// Updates the all list PID from id recieved in process gen to OS PID
+void update_alllist_pid(int virt_id, int os_pid, int start_time) {
     for(int i = 0; i < process_count; i++) {
         if(all_processes[i].P.PID == virt_id) {
             all_processes[i].P.PID = os_pid; 
@@ -24,8 +24,8 @@ void update_master_list_pid(int virt_id, int os_pid, int start_time) {
     }
 }
 
-// Updates the master list when a process finishes
-void update_master_list_finish(int pid, int time) {
+// Updates the all list when a process finishes
+void update_alllist_finish(int pid, int time) {
     for(int i = 0; i < process_count; i++) {
         if(all_processes[i].P.PID == pid) {
             all_processes[i].finish_time = time;
@@ -57,7 +57,7 @@ void start_new_process(struct PCB* p, int current_time) {
     p->start_time = current_time;
     p->state = RUNNING;
     
-    update_master_list_pid(proc_genID, pid, current_time);
+    update_alllist_pid(proc_genID, pid, current_time);
 }
 
 //Implement process switch: stop old process (SIGSTOP), save state (PCB fields), resume new (SIGCONT).
@@ -144,7 +144,7 @@ int main(int argc, char * argv[])
         int status;
         pid_t finished_pid;
         while ((finished_pid = waitpid(-1, &status, WNOHANG)) > 0) { //wait for child to finish,if no one finished dont block
-            update_master_list_finish(finished_pid, clock_time);
+            update_alllist_finish(finished_pid, clock_time);
             
             // if finished process was running on CPU
             if (current_process->P.PID != -1 && current_process->P.PID == finished_pid) {
