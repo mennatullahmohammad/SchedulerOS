@@ -199,7 +199,7 @@ int main(int argc, char * argv[])
     initClk(); 
     
     // ftok to match process gen
-    key_t key_id = ftok("keyfile", 65);
+    key_t key_id = ftok("/tmp", 'M');
     msgid = msgget(key_id, 0666 | IPC_CREAT);
 
     //recieve algorithm

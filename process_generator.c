@@ -85,7 +85,7 @@ int main(int argc, char * argv[])
     {
         printf("Which Algorithm do you want to use? (HPF, SRTN, RR)");
 
-        fgets(alg.mtext, 20, stdin);
+        sscanf(alg.mtext, 20, stdin);
 
         alg.mtext[strcspn(alg.mtext, "\n")] = '\0';
         alg.mtype = 1;
