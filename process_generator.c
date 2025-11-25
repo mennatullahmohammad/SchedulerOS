@@ -23,13 +23,15 @@ int main(int argc, char * argv[])
         temp->next = NULL;
 
         sscanf(buffer, "%d %d %d %d %d",
-           &temp->P.PID,
-           &temp->P.ArrivalTime,
-           &temp->P.Runtime,
-           &temp->P.Priority,
-           &temp->P.DependencyID);
+           &temp->Entry.P.PID,
+           &temp->Entry.P.ArrivalTime,
+           &temp->Entry.P.Runtime,
+           &temp->Entry.P.Priority,
+           &temp->Entry.P.DependencyID);
         
-        temp->P.RemainingTime = temp->P.Runtime;
+        temp->Entry.P.RemainingTime = temp->Entry.P.Runtime;
+        temp->Entry.start_time = temp->Entry.last_start_time = temp->Entry.waiting_time = 0;
+        temp->Entry.state = READY;
 
         if (Head == NULL) {
         Head = temp;
@@ -95,13 +97,13 @@ int main(int argc, char * argv[])
 
         while (Head != NULL) 
         {
-            while (getClk() < Head->P.ArrivalTime) 
+            while (getClk() < Head->Entry.P.ArrivalTime) 
             {
                 ; // busy wait
             }
 
             proc.mtype = 2;
-            proc.process = Head->P;
+            proc.process = Head->Entry;
             if (msgsnd(queue_id, &proc, sizeof(proc.process), 0) == -1) 
             {
                 perror("Error sending process to scheduler");
