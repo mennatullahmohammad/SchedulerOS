@@ -242,10 +242,10 @@ int main(int argc, char * argv[])
             }
         }
 
-        //update remaining time
-        if (current_process->P.PID != -1) {
-            current_process->P.RemainingTime--;
-        }
+        //update remaining time (done in process.c)
+        // if (current_process->P.PID != -1) {
+        //     current_process->P.RemainingTime--;
+        // }
 
         //receive new processes & Create PCB
         struct ProcessMsg proc_msg; //mtype=2
