@@ -81,7 +81,7 @@ int main(int argc, char * argv[])
     }
     else
     {
-        printf("Which Algorithm do you want to use? (HPF, STRN, RR)");
+        printf("Which Algorithm do you want to use? (HPF, SRTN, RR)");
 
         fgets(alg.mtext, 20, stdin);
 

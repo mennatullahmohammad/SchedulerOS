@@ -183,4 +183,39 @@ struct PCB* peek(struct Node* head) {
     return &(head->Entry);
 }
 
+//ROUND ROBIN CIRCULAR QUEUE IMPLEMENTATION
+void enqueueRR(struct Node** head, struct Node** tail, struct PCB p) {
+    struct Node* newNode = malloc(sizeof(struct Node));
+    newNode->Entry = p;
+    newNode->next = NULL;
+
+    if (*head == NULL) {
+        *head = *tail = newNode;
+    } else {
+        (*tail)->next = newNode;
+        *tail = newNode;
+    }
+}
+
+
+struct PCB dequeueRR(struct Node** head, struct Node** tail) {
+    struct PCB p = (*head)->Entry;
+    struct Node* temp = *head;
+    *head = (*head)->next;
+    if (*head == NULL) 
+        *tail = NULL; // queue empty
+    free(temp);
+    return p;
+}
+
+
+void moveToTail(struct Node* node, struct Node* tail) {
+    // Only call if node ran less than its runtime, ya3ny lw lesa el runtime makhles4 move it
+    if (tail) 
+        tail->next = node;
+    tail = node;
+    node->next = NULL;
+}
+
+
 #endif
