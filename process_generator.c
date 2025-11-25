@@ -54,7 +54,7 @@ int main(int argc, char * argv[])
     // 3. Initiate and create the scheduler and clock processes. DONE
     // 4. Use this function after creating the clock process to initialize clock DONE
 
-    key_t queue_key = ftok("keyfile", 65);
+    key_t queue_key = ftok("/tmp", 'M');
         
     if (queue_key == -1)
         {
