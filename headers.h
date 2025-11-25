@@ -100,12 +100,12 @@ struct ProcessMsg {
 
 //Linked List DS definition
 
-struct Node {    
+struct NodePCB {    
     struct Process P;
-    struct Node* next;
+    struct NodePCB* next;
 };
 
-void printLinkedlist(struct Node *p) {
+void printLinkedlist(struct NodePCB *p) {
   while (p != NULL) {
     printf("%d ", p->P.PID);
     p = p->next;

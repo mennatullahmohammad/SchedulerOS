@@ -15,11 +15,11 @@ int main(int argc, char * argv[])
         return 1; // Indicate an error
     }
 
-    struct Node* Head =  NULL;
+    struct NodePCB* Head =  NULL;
 
     while(fgets(buffer, sizeof(buffer), file_ptr)) 
     {
-        struct Node* temp = malloc(sizeof(struct Node));
+        struct NodePCB* temp = malloc(sizeof(struct NodePCB));
         temp->next = NULL;
 
         sscanf(buffer, "%d %d %d %d %d",
@@ -35,7 +35,7 @@ int main(int argc, char * argv[])
         Head = temp;
         } 
         else {
-        struct Node* curr = Head;
+        struct NodePCB* curr = Head;
         while (curr->next != NULL) curr = curr->next;
         curr->next = temp;
         }
@@ -108,7 +108,7 @@ int main(int argc, char * argv[])
                 exit(1);
             }
 
-            struct Node* tmp = Head;
+            struct NodePCB* tmp = Head;
             Head = Head->next;
             free(tmp);
         }       

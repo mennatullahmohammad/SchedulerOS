@@ -5,14 +5,14 @@
 
 /////enqueue and dequeue priority queue for strn
 
-struct Node {    
+struct NodePCB {    
     struct PCB P;
-    struct Node* next;
+    struct NodePCB* next;
 };
 
-bool enqueueSTRN(struct Node** head, struct PCB p)
+bool enqueueSTRN(struct NodePCB** head, struct PCB p)
 {
-    struct Node* newNode = malloc(sizeof(struct Node));  //dynamically allocate space to node
+    struct NodePCB* newNode = malloc(sizeof(struct NodePCB));  //dynamically allocate space to node
     if (!newNode) return false;
 
     newNode->P = p;
@@ -25,7 +25,7 @@ bool enqueueSTRN(struct Node** head, struct PCB p)
         return true;
     }
 
-    struct Node* cur = *head;
+    struct NodePCB* cur = *head;
     while (cur->next != NULL && cur->next->P.remaining_time <= p.remaining_time)  //loop until remainig time is less than next
         cur = cur->next;
 
@@ -34,11 +34,11 @@ bool enqueueSTRN(struct Node** head, struct PCB p)
     return true;
 }
 
-bool dequeue(struct Node** head, struct PCB* out)   
+bool dequeue(struct NodePCB** head, struct PCB* out)   
 {
     if (*head == NULL) return false;
 
-    struct Node* temp = *head;
+    struct NodePCB* temp = *head;
     *out = temp->P;
 
     *head = (*head)->next;
@@ -46,7 +46,7 @@ bool dequeue(struct Node** head, struct PCB* out)
     return true;
 }
 
-struct PCB* peek(struct Node* head) {
+struct PCB* peek(struct NodePCB* head) {
     if (head == NULL) return NULL;
     return &(head->P);
 }
