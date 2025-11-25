@@ -14,7 +14,6 @@
 #include <unistd.h>
 #include <signal.h>
 #include <string.h>
-#include "queue.c"
 
 typedef short bool;
 #define true 1
@@ -75,7 +74,7 @@ void destroyClk(bool terminateAll)
 //Process struct
 
 struct Process {
-    int PID;
+    pid_t PID;
     int ArrivalTime; 
     int Runtime;   
     int Priority;
@@ -83,6 +82,33 @@ struct Process {
     int RemainingTime;
 };
 
+
+//enum for process state
+typedef enum {READY, RUNNING, FINISHED } proc_state;
+
+//pcb struct
+struct PCB {
+    struct Process P;
+    int start_time;    
+    int finish_time;   
+    int last_start_time;
+    int waiting_time;  
+    proc_state state;  //one of the enums 0,1,2
+};
+
+//Linked List DS definition
+
+struct Node {    
+    struct PCB Entry;
+    struct Node* next;
+};
+
+void printLinkedlist(struct Node *p) {
+  while (p != NULL) {
+    printf("%d ", p->Entry.P.PID);
+    p = p->next;
+  }
+}
 
 //MQ Structs
 
@@ -93,41 +119,103 @@ struct AlgorithmMsg {
 
 struct ProcessMsg {
     long mtype;         
-    struct Process process;
+    struct PCB process;
 };
 
+typedef enum { ALG_SRTN, ALG_HPF } Algorithm;
 
+bool enqueue(struct Node** head, struct PCB p, Algorithm alg)
+{
+    struct Node* newNode = malloc(sizeof(struct Node));
+    if (!newNode) return false;
 
-//Linked List DS definition
+    newNode->Entry = p;
+    newNode->next = NULL;
 
-struct NodePCB {    
-    struct Process P;
-    struct NodePCB* next;
-};
+    // Case 1: empty list
+    if (*head == NULL)
+    {
+        *head = newNode;
+        return true;
+    }
 
-void printLinkedlist(struct NodePCB *p) {
-  while (p != NULL) {
-    printf("%d ", p->P.PID);
-    p = p->next;
-  }
+    // Decide comparison depending on algorithm
+    struct Node* cur = *head;
+
+    // Case 2: new node should be head
+    if ((alg == ALG_SRTN  && p.P.RemainingTime < cur->Entry.P.RemainingTime) ||
+        (alg == ALG_HPF   && p.P.Priority < cur->Entry.P.Priority))
+    {
+        newNode->next = *head;
+        *head = newNode;
+        return true;
+    }
+
+    // Case 3: middle insertion
+    while (cur->next != NULL &&
+          ((alg == ALG_SRTN && cur->next->Entry.P.RemainingTime <= p.P.RemainingTime) ||
+           (alg == ALG_HPF  && cur->next->Entry.P.Priority      <= p.P.Priority)))
+    {
+        cur = cur->next;
+    }
+
+    newNode->next = cur->next;
+    cur->next = newNode;
+    return true;
 }
 
 
-//enum for process state
-typedef enum {READY, RUNNING, FINISHED } proc_state;
 
-//pcb struct
-struct PCB {
-    int id;            
-    pid_t pid;         
-    int arrival_time;  
-    int burst_time;       //runtime
-    int remaining_time;
-    int start_time;    
-    int finish_time;   
-    int last_start_time;
-    int waiting_time;  
-    proc_state state;  //one of the enums 0,1,2
-};
+bool dequeue(struct Node** head, struct PCB* out)   
+{
+    if (*head == NULL) return false;
+
+    struct Node* temp = *head;
+    *out = temp->Entry;
+
+    *head = (*head)->next;
+    free(temp);
+    return true;
+}
+
+struct PCB* peek(struct Node* head) {
+    if (head == NULL) return NULL;
+    return &(head->Entry);
+}
+
+//ROUND ROBIN CIRCULAR QUEUE IMPLEMENTATION
+void enqueueRR(struct Node** head, struct Node** tail, struct PCB p) {
+    struct Node* newNode = malloc(sizeof(struct Node));
+    newNode->Entry = p;
+    newNode->next = NULL;
+
+    if (*head == NULL) {
+        *head = *tail = newNode;
+    } else {
+        (*tail)->next = newNode;
+        *tail = newNode;
+    }
+}
+
+
+struct PCB dequeueRR(struct Node** head, struct Node** tail) {
+    struct PCB p = (*head)->Entry;
+    struct Node* temp = *head;
+    *head = (*head)->next;
+    if (*head == NULL) 
+        *tail = NULL; // queue empty
+    free(temp);
+    return p;
+}
+
+
+void moveToTail(struct Node* node, struct Node* tail) {
+    // Only call if node ran less than its runtime, ya3ny lw lesa el runtime makhles4 move it
+    if (tail) 
+        tail->next = node;
+    tail = node;
+    node->next = NULL;
+}
+
 
 #endif

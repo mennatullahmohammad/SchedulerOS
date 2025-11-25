@@ -15,27 +15,29 @@ int main(int argc, char * argv[])
         return 1; // Indicate an error
     }
 
-    struct NodePCB* Head =  NULL;
+    struct Node* Head =  NULL;
 
     while(fgets(buffer, sizeof(buffer), file_ptr)) 
     {
-        struct NodePCB* temp = malloc(sizeof(struct NodePCB));
+        struct Node* temp = malloc(sizeof(struct Node));
         temp->next = NULL;
 
         sscanf(buffer, "%d %d %d %d %d",
-           &temp->P.PID,
-           &temp->P.ArrivalTime,
-           &temp->P.Runtime,
-           &temp->P.Priority,
-           &temp->P.DependencyID);
+           &temp->Entry.P.PID,
+           &temp->Entry.P.ArrivalTime,
+           &temp->Entry.P.Runtime,
+           &temp->Entry.P.Priority,
+           &temp->Entry.P.DependencyID);
         
-        temp->P.RemainingTime = temp->P.Runtime;
+        temp->Entry.P.RemainingTime = temp->Entry.P.Runtime;
+        temp->Entry.start_time = temp->Entry.last_start_time = temp->Entry.waiting_time = 0;
+        temp->Entry.state = READY;
 
         if (Head == NULL) {
         Head = temp;
         } 
         else {
-        struct NodePCB* curr = Head;
+        struct Node* curr = Head;
         while (curr->next != NULL) curr = curr->next;
         curr->next = temp;
         }
@@ -79,7 +81,7 @@ int main(int argc, char * argv[])
     }
     else
     {
-        printf("Which Algorithm do you want to use? (HPF, STRN, RR)");
+        printf("Which Algorithm do you want to use? (HPF, SRTN, RR)");
 
         fgets(alg.mtext, 20, stdin);
 
@@ -95,20 +97,20 @@ int main(int argc, char * argv[])
 
         while (Head != NULL) 
         {
-            while (getClk() < Head->P.ArrivalTime) 
+            while (getClk() < Head->Entry.P.ArrivalTime) 
             {
                 ; // busy wait
             }
 
             proc.mtype = 2;
-            proc.process = Head->P;
+            proc.process = Head->Entry;
             if (msgsnd(queue_id, &proc, sizeof(proc.process), 0) == -1) 
             {
                 perror("Error sending process to scheduler");
                 exit(1);
             }
 
-            struct NodePCB* tmp = Head;
+            struct Node* tmp = Head;
             Head = Head->next;
             free(tmp);
         }       
