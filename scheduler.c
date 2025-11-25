@@ -12,6 +12,18 @@ int process_count = 0;
 
 int msgid;
 
+//getter for PCB
+struct PCB* getPCB(int id){
+    for(int i=0; i<process_count ; i++)
+    {
+        if(all_processes[i].P.PID == id)
+        {
+            return &all_processes[i];
+        }
+    }
+    return NULL;
+}
+
 
 // Updates the all list PID from id recieved in process gen to OS PID
 void update_alllist_pid(int virt_id, int os_pid, int start_time) {
@@ -61,15 +73,16 @@ void start_new_process(struct PCB* p, int current_time) {
 }
 
 //Implement process switch: stop old process (SIGSTOP), save state (PCB fields), resume new (SIGCONT).
-void switch_process(struct PCB* old_proc, struct PCB* new_proc, int current_time) {
+void switch_process(struct PCB* old_proc, struct PCB* new_proc, int current_time, Algorithm alg) {
     // send sig stop old process (preemption)
     kill(old_proc->P.PID, SIGSTOP);
     
     //its state is ready not running
     old_proc->state = READY;
     
+    
     //enqueue  to ready queue
-    enqueue(&ready_queue, *old_proc, ALG_SRTN);
+    enqueue(&ready_queue, old_proc, alg);
 
    
     // start_time is -1, it has never run before so start 
@@ -108,11 +121,76 @@ void SRTN_scheduler(int current_time) {
             dequeue(&ready_queue, &next_proc); 
             
             
-            switch_process(current_process, &next_proc, current_time);
+            switch_process(current_process, &next_proc, current_time,ALG_SRTN);
             
             //current is next 
             *current_process = next_proc;
         }
+    }
+}
+
+//Implement hpf 1-inher funcs
+//              2-sched func
+
+void Pri_inh(struct PCB* b, struct PCB* dep)
+{
+    if(b->P.Priority > dep->P.Priority)
+    {
+        dep->P.expri= dep->P.Priority; //store orig pri
+        dep->P.Priority= b->P.Priority; //inherit from blocked
+        dep->depp=true; //it has process depending on it
+        dep->blockedID= b->P.PID; //blocked process
+    }
+}
+
+void Pri_rev(struct PCB* dep){ //return to orig pri
+    dep->P.Priority= dep->P.expri;
+}
+
+struct PCB* temp;
+void HPF_Sched(int current_time){
+    struct PCB* Hpri = peek(ready_queue); //get entry that is next
+
+    if (current_process->P.PID == -1 && Hpri != NULL) { //if cpu free and there is a ready entry
+        dequeue(&ready_queue, current_process); //deque ready to curr to run
+
+        if (current_process->start_time == -1) { //never started before
+            start_new_process(current_process, current_time);
+            if(current_process->P.DependencyID != -1){ //depends
+                temp = getPCB(current_process->P.DependencyID); //get pcb
+                Pri_inh(current_process,temp); //inheritance, restored in main
+                switch_process(current_process,temp,current_time,ALG_HPF); //switch so dependant is running
+                current_process->state=BLOCKED; //no longer ready, get's freed in main
+                current_process=temp;
+            }
+        } else {
+            //check status (either run it or run dep)
+            kill(current_process->P.PID, SIGCONT);
+            current_process->state = RUNNING;
+            if(current_process->P.DependencyID != -1){ //depends
+                temp = getPCB(current_process->P.DependencyID);
+                Pri_inh(current_process,temp); //inheritance, restored in main
+                switch_process(current_process,temp,current_time,ALG_HPF); //switch so dependant is running
+                current_process->state=BLOCKED; //get's freed in main
+                current_process=temp;
+            }
+        }
+    }
+    else if (current_process->P.PID != -1 && Hpri != NULL){ //if cpu running a process
+        if(current_process->P.Priority < Hpri->P.Priority){ //if entry is higher pri deq and make it curr (switch) and enq curr back into queue
+            dequeue(&ready_queue, Hpri); 
+        
+            switch_process(current_process,Hpri, current_time,ALG_SRTN);
+            current_process = Hpri;
+
+            if(current_process->P.DependencyID != -1){
+                temp = getPCB(current_process->P.DependencyID);
+                Pri_inh(current_process,temp);
+                switch_process(current_process,temp,current_time,ALG_HPF);
+                current_process->state=BLOCKED;
+                current_process=temp;
+            }            
+        }    
     }
 }
 
@@ -143,6 +221,8 @@ int main(int argc, char * argv[])
         // check for finished processes
         int status;
         pid_t finished_pid;
+        struct PCB* depfree;
+        int fid;
         while ((finished_pid = waitpid(-1, &status, WNOHANG)) > 0) { //wait for child to finish,if no one finished dont block
             update_alllist_finish(finished_pid, clock_time);
             
@@ -151,6 +231,14 @@ int main(int argc, char * argv[])
                 current_process->P.RemainingTime = 0;
                 current_process->state = FINISHED;
                 current_process->P.PID = -1; //CPU is now Idle
+                fid = current_process->blockedID; //free blocked process and restore pri
+                if (fid != -1)
+                {
+                    depfree=getPCB(fid);
+                    depfree->state= READY;
+                    enqueue(&ready_queue, depfree, ALG_HPF);
+                    Pri_rev(current_process);
+                }
             }
         }
 
@@ -174,10 +262,11 @@ int main(int argc, char * argv[])
             
             //add to ready queue
             if (strcmp(alg_msg.mtext, "SRTN") == 0) {
-                enqueue(&ready_queue, new_proc, ALG_SRTN);
+                enqueue(&ready_queue, &new_proc, ALG_SRTN);
             }
             else if (strcmp(alg_msg.mtext, "HPF") == 0) {
-                // Enqueue logic for HPF
+                // Enqueue logic for HPF 
+                enqueue(&ready_queue, &new_proc, ALG_HPF);
             }
             else if (strcmp(alg_msg.mtext, "RR") == 0) {
                 // Enqueue logic for RR
@@ -190,6 +279,7 @@ int main(int argc, char * argv[])
         }
         else if (strcmp(alg_msg.mtext, "HPF") == 0) {
             // HPF Scheduler Logic
+            HPF_Sched(clock_time);
         }
         else if (strcmp(alg_msg.mtext, "RR") == 0) {
             // RR Scheduler Logic

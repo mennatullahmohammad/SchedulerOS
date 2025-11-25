@@ -32,6 +32,8 @@ int main(int argc, char * argv[])
         temp->Entry.P.RemainingTime = temp->Entry.P.Runtime;
         temp->Entry.start_time = temp->Entry.last_start_time = temp->Entry.waiting_time = 0;
         temp->Entry.state = READY;
+        temp->Entry.depp = false;
+        temp->Entry.blockedID = -1;
 
         if (Head == NULL) {
         Head = temp;

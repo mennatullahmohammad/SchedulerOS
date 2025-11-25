@@ -80,11 +80,12 @@ struct Process {
     int Priority;
     int DependencyID;
     int RemainingTime;
+    int expri; //for pri inheritance
 };
 
 
 //enum for process state
-typedef enum {READY, RUNNING, FINISHED } proc_state;
+typedef enum {READY, RUNNING, FINISHED, BLOCKED} proc_state;
 
 //pcb struct
 struct PCB {
@@ -94,6 +95,8 @@ struct PCB {
     int last_start_time;
     int waiting_time;  
     proc_state state;  //one of the enums 0,1,2
+    bool depp; //does it have others depending on it?
+    int blockedID; //process blocked by it (-1 when nonexistant)
 };
 
 //Linked List DS definition
@@ -124,12 +127,12 @@ struct ProcessMsg {
 
 typedef enum { ALG_SRTN, ALG_HPF } Algorithm;
 
-bool enqueue(struct Node** head, struct PCB p, Algorithm alg)
+bool enqueue(struct Node** head, struct PCB *p, Algorithm alg)
 {
     struct Node* newNode = malloc(sizeof(struct Node));
     if (!newNode) return false;
 
-    newNode->Entry = p;
+    newNode->Entry = *p;
     newNode->next = NULL;
 
     // Case 1: empty list
@@ -143,8 +146,8 @@ bool enqueue(struct Node** head, struct PCB p, Algorithm alg)
     struct Node* cur = *head;
 
     // Case 2: new node should be head
-    if ((alg == ALG_SRTN  && p.P.RemainingTime < cur->Entry.P.RemainingTime) ||
-        (alg == ALG_HPF   && p.P.Priority < cur->Entry.P.Priority))
+    if ((alg == ALG_SRTN  && p->P.RemainingTime < cur->Entry.P.RemainingTime) ||
+        (alg == ALG_HPF   && p->P.Priority > cur->Entry.P.Priority))
     {
         newNode->next = *head;
         *head = newNode;
@@ -153,8 +156,8 @@ bool enqueue(struct Node** head, struct PCB p, Algorithm alg)
 
     // Case 3: middle insertion
     while (cur->next != NULL &&
-          ((alg == ALG_SRTN && cur->next->Entry.P.RemainingTime <= p.P.RemainingTime) ||
-           (alg == ALG_HPF  && cur->next->Entry.P.Priority      <= p.P.Priority)))
+          ((alg == ALG_SRTN && cur->next->Entry.P.RemainingTime <= p->P.RemainingTime) ||
+           (alg == ALG_HPF  && cur->next->Entry.P.Priority      >= p->P.Priority)))
     {
         cur = cur->next;
     }
