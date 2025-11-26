@@ -242,7 +242,7 @@ int main(int argc, char * argv[])
             }
         }
 
-        //update remaining time (done in process.c)
+        //update remaining time
         // if (current_process->P.PID != -1) {
         //     current_process->P.RemainingTime--;
         // }
