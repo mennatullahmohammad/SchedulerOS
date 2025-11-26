@@ -141,9 +141,13 @@ void SRTN_scheduler(int current_time) {
         
         if (current_process->start_time == -1) {
             start_new_process(current_process, current_time);
+            printSchedulerLogFile(current_process, "started");
+
         } else {
             kill(current_process->P.PID, SIGCONT);
             current_process->state = RUNNING;
+            printSchedulerLogFile(current_process, "resumed");
+
         }
     }
     
@@ -157,6 +161,8 @@ void SRTN_scheduler(int current_time) {
             
             
             switch_process(current_process, &next_proc, current_time,ALG_SRTN);
+            printSchedulerLogFile(current_process, "stopped");
+
             
             //current is next 
             *current_process = next_proc;
@@ -293,10 +299,15 @@ void HPF_Sched(int current_time){
 
         if (current_process->start_time == -1) { //never started before
             start_new_process(current_process, current_time);
+            printSchedulerLogFile(current_process, "started");
+
             if(current_process->P.DependencyID != -1){ //depends
                 temp = getPCB(current_process->P.DependencyID); //get pcb
                 Pri_inh(current_process,temp); //inheritance, restored in main
+                printSchedulerLogFile(current_process, "stopped");
+
                 switch_process(current_process,temp,current_time,ALG_HPF); //switch so dependant is running
+
                 current_process->state=BLOCKED; //no longer ready, get's freed in main
                 current_process=temp;
             }
@@ -307,7 +318,10 @@ void HPF_Sched(int current_time){
             if(current_process->P.DependencyID != -1){ //depends
                 temp = getPCB(current_process->P.DependencyID);
                 Pri_inh(current_process,temp); //inheritance, restored in main
+                printSchedulerLogFile(current_process, "stopped");
+
                 switch_process(current_process,temp,current_time,ALG_HPF); //switch so dependant is running
+
                 current_process->state=BLOCKED; //get's freed in main
                 current_process=temp;
             }
@@ -316,13 +330,17 @@ void HPF_Sched(int current_time){
     else if (current_process->P.PID != -1 && Hpri != NULL){ //if cpu running a process
         if(current_process->P.Priority < Hpri->P.Priority){ //if entry is higher pri deq and make it curr (switch) and enq curr back into queue
             dequeue(&ready_queue, Hpri); 
-        
+            printSchedulerLogFile(current_process, "stopped");
+
             switch_process(current_process,Hpri, current_time,ALG_SRTN);
+
             current_process = Hpri;
 
             if(current_process->P.DependencyID != -1){
                 temp = getPCB(current_process->P.DependencyID);
                 Pri_inh(current_process,temp);
+                printSchedulerLogFile(current_process, "stopped");
+
                 switch_process(current_process,temp,current_time,ALG_HPF);
                 current_process->state=BLOCKED;
                 current_process=temp;
@@ -404,6 +422,13 @@ void waiting(){
     standard=sqrt(sum/process_count);
 }*/
 
+/* Cleanup resources and exit */
+void cleanup_and_exit() {
+    if (msgid != -1) msgctl(msgid, IPC_RMID, NULL);
+    if (logFile) fclose(logFile);
+    destroyClk(true);
+    exit(0);
+}
 
 int main(int argc, char * argv[])
 {
@@ -423,6 +448,12 @@ int main(int argc, char * argv[])
     current_process->start_time = -1;
 
     int prev_time = -1;
+
+    /* open log */
+    logFile = fopen("scheduler.log", "w");
+    if (!logFile) { perror("fopen scheduler.log"); cleanup_and_exit(); }
+    fprintf(logFile, "#At time x process y state arr w total z remain y wait k\n");
+    fflush(logFile);
 
     while (1) {
         int clock_time = getClk();
@@ -464,10 +495,6 @@ int main(int argc, char * argv[])
             struct PCB new_proc;
             new_proc = proc_msg.process;
             
-            //initalise PCB state
-            new_proc.state = READY;
-            new_proc.start_time = -1;
-            
             //add to all processes
             all_processes[process_count++] = new_proc;
             
@@ -480,7 +507,7 @@ int main(int argc, char * argv[])
                 enqueue(&ready_queue, &new_proc, ALG_HPF);
             }
             else if (strcmp(alg_msg.mtext, "RR") == 0) {
-                // Enqueue logic for RR
+                enqueueRR(&RR_head, &RR_tail, new_proc);
             }
         }
 
@@ -493,7 +520,7 @@ int main(int argc, char * argv[])
             HPF_Sched(clock_time);
         }
         else if (strcmp(alg_msg.mtext, "RR") == 0) {
-            // RR Scheduler Logic
+            RR_scheduler(clock_time);
         }
 
         //check if all finished
@@ -551,8 +578,22 @@ int main(int argc, char * argv[])
 
     standard=round((sqrt(sum/process_count))*100.0)/100.0; //standard dev
 
+    FILE* perf = fopen("scheduler.perf", "w");
+    if (perf) {
+        fprintf(perf, "CPU utilization = %.2f%%\n", util);
+        fprintf(perf, "Avg WTA = %.2f\n", avgweight);
+        fprintf(perf, "Avg Waiting = %.2f\n", avgwait);
+        fprintf(perf, "Std WTA = %.2f\n", standard);
+        fclose(perf);
+    } else {
+        perror("fopen scheduler.perf");
+    }
 
+
+    free(current_process);
+    current_process = NULL;
     msgctl(msgid, IPC_RMID, NULL);//destroy message queue
+    if (logFile) fclose(logFile);
     destroyClk(true);
     return 0;
 }
