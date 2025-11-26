@@ -30,7 +30,7 @@ int main(int argc, char * argv[])
            &temp->Entry.P.DependencyID);
         
         temp->Entry.P.RemainingTime = temp->Entry.P.Runtime;
-        temp->Entry.start_time = temp->Entry.last_start_time = temp->Entry.waiting_time = 0;
+        temp->Entry.start_time = temp->Entry.last_start_time = temp->Entry.waiting_time = temp->Entry.finish_time = 0;
         temp->Entry.state = READY;
         temp->Entry.depp = false;
         temp->Entry.blockedID = -1;
@@ -55,7 +55,7 @@ int main(int argc, char * argv[])
     // 3. Initiate and create the scheduler and clock processes. DONE
     // 4. Use this function after creating the clock process to initialize clock DONE
 
-    key_t queue_key = ftok("keyfile", 65);
+    key_t queue_key = ftok("/tmp", 'M');
         
     if (queue_key == -1)
         {

@@ -1,20 +1,29 @@
 #include "headers.h"
+#include <stdlib.h>
 
-/* Modify this file as needed*/
 int remainingtime;
 
-int main(int agrc, char * argv[])
+int main(int argc, char * argv[])
 {
+    if (argc < 2) {
+        fprintf(stderr, "process: missing runtime arg\n");
+        return 1;
+    }
+
     initClk();
+
     
-    //TODO it needs to get the remaining time from somewhere
-    //remainingtime = ??;
+    remainingtime = atoi(argv[1]);
+
+
     while (remainingtime > 0)
     {
-        // remainingtime = ??;
+        int cur = getClk();
+        while (getClk() == cur) /* wait until clock increments */;
+        remainingtime--;
     }
-    
+
+    /* cleanup & exit to notify scheduler (SIGCHLD) */
     destroyClk(false);
-    
-    return 0;
+    exit(0);
 }

@@ -279,7 +279,7 @@ int main(int argc, char * argv[])
     initClk(); 
     
     // ftok to match process gen
-    key_t key_id = ftok("keyfile", 65);
+    key_t key_id = ftok("/tmp", 'M');
     msgid = msgget(key_id, 0666 | IPC_CREAT);
 
     //recieve algorithm
@@ -323,9 +323,9 @@ int main(int argc, char * argv[])
         }
 
         //update remaining time
-        if (current_process->P.PID != -1) {
-            current_process->P.RemainingTime--;
-        }
+        // if (current_process->P.PID != -1) {
+        //     current_process->P.RemainingTime--;
+        // }
 
         //receive new processes & Create PCB
         struct ProcessMsg proc_msg; //mtype=2
