@@ -1,4 +1,5 @@
 #include "headers.h"
+#include <math.h>
 
 #define MAX_PROCESSES 100
 #define MSG_KEY 65   
@@ -11,6 +12,11 @@ struct PCB all_processes[MAX_PROCESSES]; //keep track of all processes
 int process_count = 0;
 
 int msgid;
+
+double avgweight;
+double avgwait;
+double util;
+double standard;
 
 //getter for PCB
 struct PCB* getPCB(int id){
@@ -194,6 +200,80 @@ void HPF_Sched(int current_time){
     }
 }
 
+//calc CPU utilization = (processing time)/(total time taken) *100
+/*void Util()
+{
+    double pt=0;
+    int tot=0;
+    for(int i=0; i<process_count;i++)
+    {
+        pt+=(double)all_processes[i].P.Runtime;
+        if(all_processes[i].finish_time > tot){
+            tot = all_processes[i].finish_time;
+        }
+    }
+    util= (pt/tot)*100.0;
+}*/
+
+//turnaround = finish - arr
+void turn()
+{
+    for(int i=0;i<process_count;i++){
+        all_processes[i].turnaround = all_processes[i].finish_time - all_processes[i].P.ArrivalTime;
+    }
+}
+
+//Weighted turnaround = turn/running
+void Weighted(){
+    for(int i=0;i<process_count;i++)
+    {
+        all_processes[i].Wta=(double)all_processes[i].turnaround/all_processes[i].P.Runtime;
+    }
+}
+//avg weighted = total weighted/number of processes
+/*void Avg_Weighted()
+{
+    double twt=0;
+    for(int i=0;i<process_count;i++)
+    {
+        twt+=(double) all_processes[i].Wta;
+    }
+    avgweight=twt/process_count;
+}*/
+
+//waiting time= turnaround-runtime
+//avg waiting = total waiting/number
+void waiting(){
+    for(int i=0;i<process_count;i++)
+    {
+        all_processes[i].waiting_time=all_processes[i].turnaround-all_processes[i].P.Runtime;
+    }
+}
+/*void Avg_wait(){
+    double tw=0;
+    for(int i=0;i<process_count;i++)
+    {
+        tw+=(double)all_processes[i].waiting_time;
+    }
+
+    avgwait=tw/process_count;
+}*/
+
+//standard dev avg weighted = sqrt((sum of (avg weighted - weighted))^2/number)
+/*void standard_dev()
+{
+    double tot=0;
+    double sum=0;
+    for(int i=0; i<process_count;i++)
+    {
+        tot=avgweight-all_processes[i].Wta;
+        sum+= tot*tot;
+    }
+
+    standard=sqrt(sum/process_count);
+}*/
+
+
 int main(int argc, char * argv[])
 {
     initClk(); 
@@ -299,6 +379,47 @@ int main(int argc, char * argv[])
             }
         }
     }
+
+    double pt=0.0;
+    int tot=0;
+    for(int i=0; i<process_count;i++)
+    {
+        pt+=(double)all_processes[i].P.Runtime;
+        if(all_processes[i].finish_time > tot){
+            tot = all_processes[i].finish_time;
+        }
+    }
+    if(tot!=0)
+    util= round((pt/tot)*100.0 *100.0)/100.0; //utilization
+
+    turn(); //turnover for each
+    Weighted();//weighted for each
+
+    double twt=0.0;
+    for(int i=0;i<process_count;i++)
+    {
+        twt+=(double) all_processes[i].Wta;
+    }
+    avgweight=round((twt/process_count)*100.0)/100.0; //average weighted
+
+    waiting(); //waiting for each
+    double tw=0.0;
+    for(int i=0;i<process_count;i++)
+    {
+        tw+=(double)all_processes[i].waiting_time;
+    }
+    avgwait=round((tw/process_count)*100.0)/100.0; //average waiting
+
+    double dif=0.0;
+    double sum=0.0;
+    for(int i=0; i<process_count;i++)
+    {
+        dif=avgweight-all_processes[i].Wta;
+        sum+= dif*dif;
+    }
+
+    standard=round((sqrt(sum/process_count))*100.0)/100.0; //standard dev
+
 
     msgctl(msgid, IPC_RMID, NULL);//destroy message queue
     destroyClk(true);
