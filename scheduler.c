@@ -6,11 +6,15 @@
 
 struct Node* ready_queue = NULL; 
 struct PCB* current_process = NULL; 
+struct Node* RR_head = NULL;       // circular RR queue head (headers.h Node)
+struct Node* RR_tail = NULL;       // circular RR queue tail
 
 struct PCB all_processes[MAX_PROCESSES]; //keep track of all processes
 int process_count = 0;
 
+FILE* logFile = NULL;
 int msgid;
+int quantum = 2;
 
 //getter for PCB
 struct PCB* getPCB(int id){
@@ -24,6 +28,31 @@ struct PCB* getPCB(int id){
     return NULL;
 }
 
+/* Logging helper  */
+void printSchedulerLogFile(struct PCB* p, const char* state) {
+    if (!logFile || !p) return;
+    int t = getClk();
+    int printed_pid = p->P.PID;
+
+    if (strcmp(state, "started") == 0) {
+        fprintf(logFile, "At time %d process %d started arr %d total %d remain %d wait %d\n",
+                t, printed_pid, p->P.ArrivalTime, p->P.Runtime, p->P.RemainingTime, p->waiting_time);
+    } else if (strcmp(state, "resumed") == 0) {
+        fprintf(logFile, "At time %d process %d resumed arr %d total %d remain %d wait %d\n",
+                t, printed_pid, p->P.ArrivalTime, p->P.Runtime, p->P.RemainingTime, p->waiting_time);
+    } else if (strcmp(state, "stopped") == 0) {
+        fprintf(logFile, "At time %d process %d stopped arr %d total %d remain %d\n",
+                t, printed_pid, p->P.ArrivalTime, p->P.Runtime, p->P.RemainingTime);
+    } else if (strcmp(state, "finished") == 0) {
+        int TA = p->finish_time - p->P.ArrivalTime;
+        if (TA < 0) TA = getClk() - p->P.ArrivalTime;
+        double WTA = (p->P.Runtime > 0) ? (double)TA / (double)p->P.Runtime : 0.0;
+        int wait = TA - p->P.Runtime;
+        fprintf(logFile, "At time %d process %d finished arr %d total %d remain 0 wait %d TA %d WTA %.2f\n",
+                getClk(), printed_pid, p->P.ArrivalTime, p->P.Runtime, wait, TA, WTA);
+    }
+    fflush(logFile);
+}
 
 // Updates the all list PID from id recieved in process gen to OS PID
 void update_alllist_pid(int virt_id, int os_pid, int start_time) {
@@ -125,6 +154,108 @@ void SRTN_scheduler(int current_time) {
             
             //current is next 
             *current_process = next_proc;
+        }
+    }
+}
+
+void RR_scheduler(int current_time) {
+    /* If CPU idle -> take next from RR queue  */
+    if (current_process->P.PID == -1) {
+        if (RR_head != NULL) {
+            /* dequeue by value (your header's dequeueRR returns a struct PCB) */
+            struct PCB p = dequeueRR(&RR_head, &RR_tail);
+            *current_process = p;
+
+            if (current_process->start_time == -1) {
+                /* first time start */
+                start_new_process(current_process, current_time);
+                current_process->waiting_time = current_time - current_process->P.ArrivalTime;
+                printSchedulerLogFile(current_process, "started");
+            } else {
+               
+                if (current_process->P.PID != -1) {
+                    if (kill(current_process->P.PID, SIGCONT) == -1) {
+                       
+                        start_new_process(current_process, current_time);
+                        current_process->waiting_time = current_time - current_process->P.ArrivalTime;
+                        printSchedulerLogFile(current_process, "started");
+                    } else {
+                        current_process->state = RUNNING;
+                        current_process->last_start_time = current_time;
+                        printSchedulerLogFile(current_process, "resumed");
+                    }
+                } else {
+                    
+                    start_new_process(current_process, current_time);
+                    current_process->waiting_time = current_time - current_process->P.ArrivalTime;
+                    printSchedulerLogFile(current_process, "started");
+                }
+            }
+
+            /* set slice end time using current remaining */
+            int rem = current_process->P.RemainingTime;
+            if (rem <= 0) rem = current_process->P.Runtime; /* defensive */
+            current_process->start_time = current_time;
+            current_process->finish_time = current_time + ((rem >= quantum) ? quantum : rem);
+        }
+        return;
+    }
+
+        if (current_process->P.PID != -1 && current_process->state == RUNNING && getClk() >= current_process->finish_time) {
+        pid_t pid = current_process->P.PID;
+        /* Decrementing of RemainingTime is done in main loop per tick; here we just preempt based on slice end */
+
+        /* If process still alive, stop and enqueue a copy */
+        if (pid != -1) {
+            /* Log stopped */
+            printSchedulerLogFile(current_process, "stopped");
+
+            /* Stop the child; if it exited between checks, kill will fail but we continue */
+            if (kill(pid, SIGSTOP) == -1) {
+                /* ignore error; child may have exited */
+            }
+
+            /* Enqueue a copy (circular queue implementation in headers.h expects a struct PCB by value) */
+            struct PCB copyPCB = *current_process;
+            copyPCB.state = READY;
+            enqueueRR(&RR_head, &RR_tail, copyPCB);
+
+            /* Mark CPU idle (the stopped child still exists but CPU has no active process in placeholder) */
+            current_process->P.PID = -1;
+            current_process->state = READY;
+        }
+
+        /*  pick next process if available */
+        if (RR_head != NULL) {
+            struct PCB p = dequeueRR(&RR_head, &RR_tail);
+            *current_process = p;
+
+            if (current_process->start_time == -1) {
+                start_new_process(current_process, getClk());
+                current_process->waiting_time = getClk() - current_process->P.ArrivalTime;
+                printSchedulerLogFile(current_process, "started");
+            } else {
+                if (current_process->P.PID != -1) {
+                    if (kill(current_process->P.PID, SIGCONT) == -1) {
+                        start_new_process(current_process, getClk());
+                        current_process->waiting_time = getClk() - current_process->P.ArrivalTime;
+                        printSchedulerLogFile(current_process, "started");
+                    } else {
+                        current_process->state = RUNNING;
+                        current_process->last_start_time = getClk();
+                        printSchedulerLogFile(current_process, "resumed");
+                    }
+                } else {
+                    start_new_process(current_process, getClk());
+                    current_process->waiting_time = getClk() - current_process->P.ArrivalTime;
+                    printSchedulerLogFile(current_process, "started");
+                }
+            }
+
+            int rem2 = current_process->P.RemainingTime;
+            if (rem2 <= 0) rem2 = current_process->P.Runtime;
+            current_process->start_time = getClk();
+            current_process->finish_time = current_process->start_time + ((rem2 >= quantum) ? quantum : rem2);
         }
     }
 }

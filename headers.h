@@ -14,6 +14,11 @@
 #include <unistd.h>
 #include <signal.h>
 #include <string.h>
+#include <errno.h>
+
+#define MAX_PROCESSES 100
+#define MSG_KEY 65
+
 
 typedef short bool;
 #define true 1
