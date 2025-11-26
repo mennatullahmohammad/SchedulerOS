@@ -98,7 +98,9 @@ struct PCB {
     int start_time;    
     int finish_time;   
     int last_start_time;
-    int waiting_time;  
+    int waiting_time; 
+    int turnaround; 
+    double Wta;
     proc_state state;  //one of the enums 0,1,2
     bool depp; //does it have others depending on it?
     int blockedID; //process blocked by it (-1 when nonexistant)

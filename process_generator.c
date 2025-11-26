@@ -34,6 +34,7 @@ int main(int argc, char * argv[])
         temp->Entry.state = READY;
         temp->Entry.depp = false;
         temp->Entry.blockedID = -1;
+        temp->Entry.turnaround = 0;
 
         if (Head == NULL) {
         Head = temp;
