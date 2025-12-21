@@ -31,7 +31,7 @@ int main(int argc, char * argv[])
             finish_msg.pid = getpid();
             finish_msg.finish_time = getClk();
             
-            msgsnd(msgid, &finish_msg, sizeof(finish_msg) - sizeof(long), 0);
+            msgsnd(msgid, &finish_msg, sizeof(finish_msg), 0);
         }
     }
     /* cleanup & exit to notify scheduler (SIGCHLD) */

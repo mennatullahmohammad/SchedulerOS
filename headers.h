@@ -145,6 +145,7 @@ struct FinishMsg {
     pid_t pid;            // process PID
     int finish_time;      // time when finished
 };
+
 typedef enum { ALG_SRTN, ALG_HPF } Algorithm;
 
 bool enqueue(struct Node** head, struct PCB *p, Algorithm alg)

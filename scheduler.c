@@ -530,7 +530,7 @@ int main(int argc, char* argv[]) {
         }
         //notification from process that it finished, dont blocl
         struct FinishMsg finish_msg;
-        while (msgrcv(msgid, &finish_msg, sizeof(finish_msg) - sizeof(long), 4, IPC_NOWAIT) != -1) {
+        while (msgrcv(msgid, &finish_msg, sizeof(finish_msg), 4, IPC_NOWAIT) != -1) {
             pid_t finished_pid = finish_msg.pid;
             
             // Reap the finished process
