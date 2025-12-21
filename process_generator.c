@@ -74,23 +74,6 @@ int main(int argc, char * argv[])
     struct AlgorithmMsg alg;
     struct ProcessMsg proc;
 
-        pid_t clock_pid = fork();
-        if (clock_pid == 0) {
-        execl("./clk.out", "clk.out", NULL);
-        perror("Error starting clock");
-        exit(EXIT_FAILURE);
-        }
-
-    
-    pid_t sched = fork();
-    if (sched == 0)
-    {
-        execl("./scheduler.out", "scheduler.out", NULL);
-        perror("execl failed");  // in case exec fails
-        exit(1);
-    }
-    else
-    {
         printf("Which Algorithm do you want to use? (HPF, SRTN, RR)");
 
         fgets(alg.mtext, 20, stdin);
@@ -103,7 +86,24 @@ int main(int argc, char * argv[])
             exit(1);
         }
 
-        initClk();
+        pid_t clock_pid = fork();
+        if (clock_pid == 0) {
+        execl("./clk.out", "clk.out", NULL);
+        perror("Error starting clock");
+        exit(EXIT_FAILURE);
+        }
+
+    initClk();
+    
+    pid_t sched = fork();
+    if (sched == 0)
+    {
+        execl("./scheduler.out", "scheduler.out", NULL);
+        perror("execl failed");  // in case exec fails
+        exit(1);
+    }
+    else
+    {
 
         int sent_processes = 0;
         int next_process_index = 0;
