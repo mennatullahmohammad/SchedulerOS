@@ -1,50 +1,18 @@
 #At time x process y state arr w total z remain y wait k
-At time 10 process 2790 started arr 1 total 17 remain 17 wait 9
-At time 12 process 2790 stopped arr 1 total 17 remain 17
-At time 12 process 2790 resumed arr 1 total 17 remain 17 wait 9
-At time 14 process 2790 stopped arr 1 total 17 remain 17
-At time 14 process 2790 resumed arr 1 total 17 remain 17 wait 9
-At time 16 process 2790 stopped arr 1 total 17 remain 17
-At time 16 process 2790 resumed arr 1 total 17 remain 17 wait 9
-At time 18 process 2790 stopped arr 1 total 17 remain 17
-At time 18 process 2818 started arr 17 total 1 remain 1 wait 1
-At time 19 process 2818 stopped arr 17 total 1 remain 1
-At time 19 process 2818 resumed arr 17 total 1 remain 1 wait 1
-At time 25 process 2853 started arr 24 total 3 remain 3 wait 1
-At time 27 process 2853 stopped arr 24 total 3 remain 3
-At time 27 process 2853 resumed arr 24 total 3 remain 3 wait 1
-At time 31 process 2860 started arr 30 total 18 remain 18 wait 1
-At time 33 process 2860 stopped arr 30 total 18 remain 18
-At time 33 process 2860 resumed arr 30 total 18 remain 18 wait 1
-At time 35 process 2860 stopped arr 30 total 18 remain 18
-At time 35 process 2860 resumed arr 30 total 18 remain 18 wait 1
-At time 37 process 2860 stopped arr 30 total 18 remain 18
-At time 37 process 2860 resumed arr 30 total 18 remain 18 wait 1
-At time 39 process 2860 stopped arr 30 total 18 remain 18
-At time 39 process 2865 started arr 38 total 10 remain 10 wait 1
-At time 41 process 2865 stopped arr 38 total 10 remain 10
-At time 41 process 2865 resumed arr 38 total 10 remain 10 wait 1
-At time 43 process 2865 stopped arr 38 total 10 remain 10
-At time 43 process 2872 started arr 42 total 24 remain 24 wait 1
-At time 45 process 2872 stopped arr 42 total 24 remain 24
-At time 45 process 2872 resumed arr 42 total 24 remain 24 wait 1
-At time 47 process 2872 stopped arr 42 total 24 remain 24
-At time 47 process 2872 resumed arr 42 total 24 remain 24 wait 1
-At time 49 process 2872 stopped arr 42 total 24 remain 24
-At time 49 process 2881 started arr 48 total 12 remain 12 wait 1
-At time 51 process 2881 stopped arr 48 total 12 remain 12
-At time 51 process 2881 resumed arr 48 total 12 remain 12 wait 1
-At time 53 process 2881 stopped arr 48 total 12 remain 12
-At time 53 process 2881 resumed arr 48 total 12 remain 12 wait 1
-At time 55 process 2881 stopped arr 48 total 12 remain 12
-At time 55 process 2881 resumed arr 48 total 12 remain 12 wait 1
-At time 57 process 2881 stopped arr 48 total 12 remain 12
-At time 57 process 2881 resumed arr 48 total 12 remain 12 wait 1
-At time 59 process 2881 stopped arr 48 total 12 remain 12
-At time 59 process 2890 started arr 57 total 9 remain 9 wait 2
-At time 61 process 2890 stopped arr 57 total 9 remain 9
-At time 61 process 2890 resumed arr 57 total 9 remain 9 wait 2
-At time 63 process 2890 stopped arr 57 total 9 remain 9
-At time 63 process 2890 resumed arr 57 total 9 remain 9 wait 2
-At time 65 process 2890 stopped arr 57 total 9 remain 9
-At time 65 process 2890 resumed arr 57 total 9 remain 9 wait 2
+At time 67 process 24139 started arr 0 total 14680064 remain 0 wait 67
+At time 69 process 24139 stopped arr 0 total 14680064 remain 0
+At time 69 process 24139 resumed arr 0 total 14680064 remain 0 wait 67
+At time 71 process 24139 stopped arr 0 total 14680064 remain 0
+At time 71 process 24139 resumed arr 0 total 14680064 remain 0 wait 67
+At time 73 process 24139 stopped arr 0 total 14680064 remain 0
+At time 73 process 24139 resumed arr 0 total 14680064 remain 0 wait 67
+At time 75 process 24139 stopped arr 0 total 14680064 remain 0
+At time 75 process 24139 resumed arr 0 total 14680064 remain 0 wait 67
+At time 77 process 24139 stopped arr 0 total 14680064 remain 0
+At time 77 process 24139 resumed arr 0 total 14680064 remain 0 wait 67
+At time 79 process 24139 stopped arr 0 total 14680064 remain 0
+At time 79 process 24139 resumed arr 0 total 14680064 remain 0 wait 67
+At time 81 process 24139 stopped arr 0 total 14680064 remain 0
+At time 81 process 24139 resumed arr 0 total 14680064 remain 0 wait 67
+At time 83 process 24139 stopped arr 0 total 14680064 remain 0
+At time 83 process 24139 resumed arr 0 total 14680064 remain 0 wait 67

@@ -74,6 +74,13 @@ int main(int argc, char * argv[])
     struct AlgorithmMsg alg;
     struct ProcessMsg proc;
 
+        pid_t clock_pid = fork();
+        if (clock_pid == 0) {
+        execl("./clk.out", "clk.out", NULL);
+        perror("Error starting clock");
+        exit(EXIT_FAILURE);
+        }
+
     
     pid_t sched = fork();
     if (sched == 0)
@@ -96,13 +103,6 @@ int main(int argc, char * argv[])
             exit(1);
         }
 
-        pid_t clock_pid = fork();
-        if (clock_pid == 0) {
-        execl("./clk.out", "clk.out", NULL);
-        perror("Error starting clock");
-        exit(EXIT_FAILURE);
-        }
-
         initClk();
 
         int sent_processes = 0;
@@ -117,17 +117,18 @@ int main(int argc, char * argv[])
 
             proc.mtype = 1;
             proc.proc = processes[next_process_index];
-            if (msgsnd(queue_id, &proc, sizeof(proc), 0) == -1) 
+            if (msgsnd(queue_id, &proc, sizeof(proc.proc), 0) == -1) 
             {
                 perror("Error sending process to scheduler");
                 exit(1);
             }
             sent_processes++;
+            next_process_index++;
 
         }      
         
         proc.mtype = 2; // Message type for end of processes
-        msgsnd(queue_id, &proc, sizeof(proc), 0);
+        msgsnd(queue_id, &proc, 0, 0);
         // Wait for scheduler to finish
         waitpid(sched, NULL, 0);
     // TODO Generation Main Loop
