@@ -149,6 +149,7 @@ void start_new_process(struct PCB* p, int current_time) {
 /* Switch between processes (for SRTN and HPF) */
 void switch_process(struct PCB* old_proc, struct PCB* new_proc, int current_time, Algorithm alg) {
     kill(old_proc->P.PID, SIGSTOP);
+    old_proc->last_start_time = current_time; //last started time
     old_proc->state = READY;
     enqueue(&ready_queue, old_proc, alg);
 
