@@ -1,40 +1,100 @@
 #include "headers.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <math.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+#include <sys/wait.h>
+#include <signal.h>
+#include <unistd.h>
+#include <errno.h>
 
 #define MAX_PROCESSES 100
-#define MSG_KEY 65   
+#define MSG_KEY 65
 
+struct Node* ready_queue = NULL;   // For SRTN and HPF
+struct Node* RR_head = NULL;       // For RR circular queue head
+struct Node* RR_tail = NULL;       // For RR circular queue tail
 
-struct Node* ready_queue = NULL; 
-struct PCB* current_process = NULL; 
-struct Node* RR_head = NULL;       // circular RR queue head (headers.h Node)
-struct Node* RR_tail = NULL;       // circular RR queue tail
-
-struct PCB all_processes[MAX_PROCESSES]; //keep track of all processes
+struct PCB* current_process = NULL;
+struct PCB all_processes[MAX_PROCESSES];
 int process_count = 0;
 
 FILE* logFile = NULL;
-int msgid;
+int msgid = -1;
+
 int quantum = 2;
+int runningProcessStartTime = 0;
+int runningProcessEndTime = 0;
 
-double avgweight;
-double avgwait;
-double util;
-double standard;
 
-//getter for PCB
-struct PCB* getPCB(int id){
-    for(int i=0; i<process_count ; i++)
-    {
-        if(all_processes[i].P.PID == id)
-        {
+void printSchedulerLogFile(struct PCB* p, const char* state);
+struct PCB* find_master_by_pid(pid_t pid);
+struct PCB* getPCB(int id);
+void update_master_list_pid(int virt_id, pid_t os_pid, int start_time);
+void update_master_list_finish(pid_t pid, int time);
+void start_new_process(struct PCB* p, int current_time);
+void switch_process(struct PCB* old_proc, struct PCB* new_proc, int current_time, Algorithm alg);
+void SRTN_scheduler(int current_time);
+void HPF_scheduler(int current_time);
+void RR_scheduler(int current_time);
+void Pri_inh(struct PCB* b, struct PCB* dep);
+void Pri_rev(struct PCB* dep);
+void generate_perf_file();
+void cleanup_and_exit();
+
+/* Memory Management (Phase 2) */
+struct PCB blocked_list[MAX_PROCESSES];
+int blocked_count = 0;
+
+int MMU_access(struct PCB* p) {
+    return 0;   // always OK for now 
+}
+
+// Get PCB by ID 
+struct PCB* getPCB(int id) {
+    for (int i = 0; i < process_count; i++) {
+        if (all_processes[i].P.PID == id) {
             return &all_processes[i];
         }
     }
     return NULL;
 }
 
-/* Logging helper  */
+//Find master PCB by OS pid 
+struct PCB* find_master_by_pid(pid_t pid) {
+    for (int i = 0; i < process_count; i++) {
+        if (all_processes[i].P.PID == pid) return &all_processes[i];
+    }
+    return NULL;
+}
+
+//Update master list (replace generator id with OS pid) 
+void update_master_list_pid(int virt_id, pid_t os_pid, int start_time) {
+    for (int i = 0; i < process_count; i++) {
+        if (all_processes[i].P.PID == virt_id) {
+            all_processes[i].P.PID = os_pid;
+            all_processes[i].start_time = start_time;
+            return;
+        }
+    }
+}
+
+/* Update master list on finish */
+void update_master_list_finish(pid_t pid, int time) {
+    for (int i = 0; i < process_count; i++) {
+        if (all_processes[i].P.PID == pid) {
+            all_processes[i].finish_time = time;
+            all_processes[i].state = FINISHED;
+            all_processes[i].P.RemainingTime = 0;
+            return;
+        }
+    }
+}
+
+// Logging helper 
 void printSchedulerLogFile(struct PCB* p, const char* state) {
     if (!logFile || !p) return;
     int t = getClk();
@@ -47,8 +107,8 @@ void printSchedulerLogFile(struct PCB* p, const char* state) {
         fprintf(logFile, "At time %d process %d resumed arr %d total %d remain %d wait %d\n",
                 t, printed_pid, p->P.ArrivalTime, p->P.Runtime, p->P.RemainingTime, p->waiting_time);
     } else if (strcmp(state, "stopped") == 0) {
-        fprintf(logFile, "At time %d process %d stopped arr %d total %d remain %d\n",
-                t, printed_pid, p->P.ArrivalTime, p->P.Runtime, p->P.RemainingTime);
+        fprintf(logFile, "At time %d process %d stopped arr %d total %d remain %d wait %d\n",
+                t, printed_pid, p->P.ArrivalTime, p->P.Runtime, p->P.RemainingTime, p->waiting_time);
     } else if (strcmp(state, "finished") == 0) {
         int TA = p->finish_time - p->P.ArrivalTime;
         if (TA < 0) TA = getClk() - p->P.ArrivalTime;
@@ -60,184 +120,220 @@ void printSchedulerLogFile(struct PCB* p, const char* state) {
     fflush(logFile);
 }
 
-// Updates the all list PID from id recieved in process gen to OS PID
-void update_alllist_pid(int virt_id, int os_pid, int start_time) {
-    for(int i = 0; i < process_count; i++) {
-        if(all_processes[i].P.PID == virt_id) {
-            all_processes[i].P.PID = os_pid; 
-            all_processes[i].start_time = start_time;
-            break;
-        }
-    }
-}
-
-// Updates the all list when a process finishes
-void update_alllist_finish(int pid, int time) {
-    for(int i = 0; i < process_count; i++) {
-        if(all_processes[i].P.PID == pid) {
-            all_processes[i].finish_time = time;
-            all_processes[i].state = FINISHED;
-            all_processes[i].P.RemainingTime = 0;
-            break;
-        }
-    }
-}
-
-// Implement process start: fork + exec (give child its params).
-
+// Start a new process 
 void start_new_process(struct PCB* p, int current_time) {
-    char str_runtime[10];  //command for execl must be string
-    sprintf(str_runtime, "%d", p->P.Runtime); //converts runtime integer to string
-    
-    // process generator id to find the PCB in master list later
-    int proc_genID = p->P.PID; 
+    char str_runtime[32];
+    snprintf(str_runtime, sizeof(str_runtime), "%d", p->P.Runtime);
+
+    int virt_id = p->P.PID;
 
     pid_t pid = fork();
-    
-    if (pid == 0) {   //child, it executes process code 
-        execl("./process.out", "process.out", str_runtime, NULL); //replaces child with code from process.c
-        exit(1); //normal exit
+    if (pid < 0) {
+        perror("fork");
+        return;
     }
-    
-    //parent update PCB PID and state
+    if (pid == 0) {
+        execl("./process.out", "process.out", str_runtime, NULL);
+        perror("execl process.out");
+        exit(1);
+    }
+
     p->P.PID = pid;
     p->start_time = current_time;
+    p->last_start_time = current_time;
     p->state = RUNNING;
-    
-    update_alllist_pid(proc_genID, pid, current_time);
+
+    update_master_list_pid(virt_id, pid, current_time);
 }
 
-//Implement process switch: stop old process (SIGSTOP), save state (PCB fields), resume new (SIGCONT).
+/* Switch between processes (for SRTN and HPF) */
 void switch_process(struct PCB* old_proc, struct PCB* new_proc, int current_time, Algorithm alg) {
-    // send sig stop old process (preemption)
     kill(old_proc->P.PID, SIGSTOP);
-    
-    //its state is ready not running
     old_proc->state = READY;
-    
-    
-    //enqueue  to ready queue
     enqueue(&ready_queue, old_proc, alg);
 
-   
-    // start_time is -1, it has never run before so start 
     if (new_proc->start_time == -1) {
-         start_new_process(new_proc, current_time);
+        start_new_process(new_proc, current_time);
+        new_proc->waiting_time = current_time - new_proc->P.ArrivalTime;
+        printSchedulerLogFile(new_proc, "started");
     } else {
-         //resume
-         kill(new_proc->P.PID, SIGCONT);
-         new_proc->state = RUNNING;
+        kill(new_proc->P.PID, SIGCONT);
+        new_proc->state = RUNNING;
+        int time_in_queue = current_time - new_proc->last_start_time;
+        new_proc->waiting_time += time_in_queue;
+        new_proc->last_start_time = current_time;
+        printSchedulerLogFile(new_proc, "resumed");
     }
 }
 
-//Implement Shortest Remaining Time Next (SRTN) (preemptive shortest remaining time).
+/* Priority Inheritance (for HPF) */
+void Pri_inh(struct PCB* b, struct PCB* dep) {
+    if (b->P.Priority > dep->P.Priority) {
+        dep->P.expri = dep->P.Priority;
+        dep->P.Priority = b->P.Priority;
+        dep->depp = true;
+        dep->blockedID = b->P.PID;
+    }
+}
 
+void Pri_rev(struct PCB* dep) {
+    dep->P.Priority = dep->P.expri;
+}
+
+//SRTN Scheduler 
 void SRTN_scheduler(int current_time) {
     struct PCB* shortest_job = peek(ready_queue);
 
-    // case 1 CPU is Idle ,dequeue
-    if (current_process->P.PID == -1 && shortest_job != NULL) { //no current process
-        dequeue(&ready_queue, current_process); 
+    // CPU is Idle, dequeue shortest job
+    if (current_process->P.PID == -1 && shortest_job != NULL) {
+        dequeue(&ready_queue, current_process);
         
         if (current_process->start_time == -1) {
             start_new_process(current_process, current_time);
+            current_process->waiting_time = current_time - current_process->P.ArrivalTime;
             printSchedulerLogFile(current_process, "started");
-
         } else {
             kill(current_process->P.PID, SIGCONT);
             current_process->state = RUNNING;
+            int time_in_queue = current_time - current_process->last_start_time;
+            current_process->waiting_time += time_in_queue;
+            current_process->last_start_time = current_time;
             printSchedulerLogFile(current_process, "resumed");
-
         }
     }
-    
-    // case 2 CPU is Busy, but queue has a shorter job
+    // CPU is Busy, check for preemption
     else if (current_process->P.PID != -1 && shortest_job != NULL) {
         if (shortest_job->P.RemainingTime < current_process->P.RemainingTime) {
-            
-            // swap processes. 
             struct PCB next_proc;
-            dequeue(&ready_queue, &next_proc); 
+            dequeue(&ready_queue, &next_proc);
             
-            
-            switch_process(current_process, &next_proc, current_time,ALG_SRTN);
             printSchedulerLogFile(current_process, "stopped");
-
+            switch_process(current_process, &next_proc, current_time, ALG_SRTN);
             
-            //current is next 
             *current_process = next_proc;
         }
     }
 }
 
+/* HPF Scheduler */
+struct PCB* temp_hpf;
+
+void HPF_scheduler(int current_time) {
+    struct PCB* Hpri = peek(ready_queue);
+
+    if (current_process->P.PID == -1 && Hpri != NULL) {
+        dequeue(&ready_queue, current_process);
+
+        if (current_process->start_time == -1) {
+            start_new_process(current_process, current_time);
+            current_process->waiting_time = current_time - current_process->P.ArrivalTime;
+            printSchedulerLogFile(current_process, "started");
+
+            if (current_process->P.DependencyID != -1) {
+                temp_hpf = getPCB(current_process->P.DependencyID);
+                Pri_inh(current_process, temp_hpf);
+                printSchedulerLogFile(current_process, "stopped");
+                switch_process(current_process, temp_hpf, current_time, ALG_HPF);
+                current_process->state = BLOCKED;
+                current_process = temp_hpf;
+            }
+        } else {
+            kill(current_process->P.PID, SIGCONT);
+            current_process->state = RUNNING;
+            int time_in_queue = current_time - current_process->last_start_time;
+            current_process->waiting_time += time_in_queue;
+            current_process->last_start_time = current_time;
+            printSchedulerLogFile(current_process, "resumed");
+            
+            if (current_process->P.DependencyID != -1) {
+                temp_hpf = getPCB(current_process->P.DependencyID);
+                Pri_inh(current_process, temp_hpf);
+                printSchedulerLogFile(current_process, "stopped");
+                switch_process(current_process, temp_hpf, current_time, ALG_HPF);
+                current_process->state = BLOCKED;
+                current_process = temp_hpf;
+            }
+        }
+    }
+    else if (current_process->P.PID != -1 && Hpri != NULL) {
+        if (current_process->P.Priority < Hpri->P.Priority) {
+            struct PCB next_proc;
+            dequeue(&ready_queue, &next_proc);
+            
+            printSchedulerLogFile(current_process, "stopped");
+            switch_process(current_process, &next_proc, current_time, ALG_HPF);
+            
+            *current_process = next_proc;
+
+            if (current_process->P.DependencyID != -1) {
+                temp_hpf = getPCB(current_process->P.DependencyID);
+                Pri_inh(current_process, temp_hpf);
+                printSchedulerLogFile(current_process, "stopped");
+                switch_process(current_process, temp_hpf, current_time, ALG_HPF);
+                current_process->state = BLOCKED;
+                current_process = temp_hpf;
+            }
+        }
+    }
+}
+
+// Round Robin Scheduler 
 void RR_scheduler(int current_time) {
-    /* If CPU idle -> take next from RR queue  */
     if (current_process->P.PID == -1) {
         if (RR_head != NULL) {
-            /* dequeue by value (your header's dequeueRR returns a struct PCB) */
             struct PCB p = dequeueRR(&RR_head, &RR_tail);
             *current_process = p;
 
             if (current_process->start_time == -1) {
-                /* first time start */
                 start_new_process(current_process, current_time);
                 current_process->waiting_time = current_time - current_process->P.ArrivalTime;
                 printSchedulerLogFile(current_process, "started");
             } else {
-               
                 if (current_process->P.PID != -1) {
                     if (kill(current_process->P.PID, SIGCONT) == -1) {
-                       
                         start_new_process(current_process, current_time);
                         current_process->waiting_time = current_time - current_process->P.ArrivalTime;
                         printSchedulerLogFile(current_process, "started");
                     } else {
                         current_process->state = RUNNING;
+                        int time_in_queue = current_time - current_process->last_start_time;
+                        current_process->waiting_time += time_in_queue;
                         current_process->last_start_time = current_time;
                         printSchedulerLogFile(current_process, "resumed");
                     }
                 } else {
-                    
                     start_new_process(current_process, current_time);
                     current_process->waiting_time = current_time - current_process->P.ArrivalTime;
                     printSchedulerLogFile(current_process, "started");
                 }
             }
 
-            /* set slice end time using current remaining */
             int rem = current_process->P.RemainingTime;
-            if (rem <= 0) rem = current_process->P.Runtime; /* defensive */
-            current_process->start_time = current_time;
-            current_process->finish_time = current_time + ((rem >= quantum) ? quantum : rem);
+            if (rem <= 0) rem = current_process->P.Runtime;
+            runningProcessStartTime = current_time;
+            runningProcessEndTime = current_time + ((rem >= quantum) ? quantum : rem);
         }
         return;
     }
 
-        if (current_process->P.PID != -1 && current_process->state == RUNNING && getClk() >= current_process->finish_time) {
+    if (current_process->P.PID != -1 && current_process->state == RUNNING && getClk() >= runningProcessEndTime) {
         pid_t pid = current_process->P.PID;
-        /* Decrementing of RemainingTime is done in main loop per tick; here we just preempt based on slice end */
 
-        /* If process still alive, stop and enqueue a copy */
         if (pid != -1) {
-            /* Log stopped */
             printSchedulerLogFile(current_process, "stopped");
 
-            /* Stop the child; if it exited between checks, kill will fail but we continue */
             if (kill(pid, SIGSTOP) == -1) {
-                /* ignore error; child may have exited */
+                /* ignore error */
             }
 
-            /* Enqueue a copy (circular queue implementation in headers.h expects a struct PCB by value) */
             struct PCB copyPCB = *current_process;
             copyPCB.state = READY;
             enqueueRR(&RR_head, &RR_tail, copyPCB);
 
-            /* Mark CPU idle (the stopped child still exists but CPU has no active process in placeholder) */
             current_process->P.PID = -1;
             current_process->state = READY;
         }
 
-        /*  pick next process if available */
         if (RR_head != NULL) {
             struct PCB p = dequeueRR(&RR_head, &RR_tail);
             *current_process = p;
@@ -254,6 +350,8 @@ void RR_scheduler(int current_time) {
                         printSchedulerLogFile(current_process, "started");
                     } else {
                         current_process->state = RUNNING;
+                        int time_in_queue = getClk() - current_process->last_start_time;
+                        current_process->waiting_time += time_in_queue;
                         current_process->last_start_time = getClk();
                         printSchedulerLogFile(current_process, "resumed");
                     }
@@ -266,370 +364,306 @@ void RR_scheduler(int current_time) {
 
             int rem2 = current_process->P.RemainingTime;
             if (rem2 <= 0) rem2 = current_process->P.Runtime;
-            current_process->start_time = getClk();
-            current_process->finish_time = current_process->start_time + ((rem2 >= quantum) ? quantum : rem2);
+            runningProcessStartTime = getClk();
+            runningProcessEndTime = runningProcessStartTime + ((rem2 >= quantum) ? quantum : rem2);
         }
     }
 }
 
-//Implement hpf 1-inher funcs
-//              2-sched func
+/* Generate performance statistics file */
+void generate_perf_file() {
+    double total_wta = 0.0;
+    double total_waiting = 0.0;
+    int finished_count = 0;
+    int total_runtime = 0;
+    int last_finish_time = 0;
 
-void Pri_inh(struct PCB* b, struct PCB* dep)
-{
-    if(b->P.Priority > dep->P.Priority)
-    {
-        dep->P.expri= dep->P.Priority; //store orig pri
-        dep->P.Priority= b->P.Priority; //inherit from blocked
-        dep->depp=true; //it has process depending on it
-        dep->blockedID= b->P.PID; //blocked process
-    }
-}
-
-void Pri_rev(struct PCB* dep){ //return to orig pri
-    dep->P.Priority= dep->P.expri;
-}
-
-struct PCB* temp;
-void HPF_Sched(int current_time){
-    struct PCB* Hpri = peek(ready_queue); //get entry that is next
-
-    if (current_process->P.PID == -1 && Hpri != NULL) { //if cpu free and there is a ready entry
-        dequeue(&ready_queue, current_process); //deque ready to curr to run
-
-        if (current_process->start_time == -1) { //never started before
-            start_new_process(current_process, current_time);
-            printSchedulerLogFile(current_process, "started");
-
-            if(current_process->P.DependencyID != -1){ //depends
-                temp = getPCB(current_process->P.DependencyID); //get pcb
-                Pri_inh(current_process,temp); //inheritance, restored in main
-                printSchedulerLogFile(current_process, "stopped");
-
-                switch_process(current_process,temp,current_time,ALG_HPF); //switch so dependant is running
-
-                current_process->state=BLOCKED; //no longer ready, get's freed in main
-                current_process=temp;
-            }
-        } else {
-            //check status (either run it or run dep)
-            kill(current_process->P.PID, SIGCONT);
-            current_process->state = RUNNING;
-            if(current_process->P.DependencyID != -1){ //depends
-                temp = getPCB(current_process->P.DependencyID);
-                Pri_inh(current_process,temp); //inheritance, restored in main
-                printSchedulerLogFile(current_process, "stopped");
-
-                switch_process(current_process,temp,current_time,ALG_HPF); //switch so dependant is running
-
-                current_process->state=BLOCKED; //get's freed in main
-                current_process=temp;
-            }
+    for (int i = 0; i < process_count; i++) {
+        if (all_processes[i].state == FINISHED) {
+            int TA = all_processes[i].finish_time - all_processes[i].P.ArrivalTime;
+            double WTA = (double)TA / (double)all_processes[i].P.Runtime;
+            int wait = TA - all_processes[i].P.Runtime;
+            
+            total_wta += WTA;
+            total_waiting += wait;
+            total_runtime += all_processes[i].P.Runtime;
+            finished_count++;
+            
+            if (all_processes[i].finish_time > last_finish_time)
+                last_finish_time = all_processes[i].finish_time;
         }
     }
-    else if (current_process->P.PID != -1 && Hpri != NULL){ //if cpu running a process
-        if(current_process->P.Priority < Hpri->P.Priority){ //if entry is higher pri deq and make it curr (switch) and enq curr back into queue
-            dequeue(&ready_queue, Hpri); 
-            printSchedulerLogFile(current_process, "stopped");
 
-            switch_process(current_process,Hpri, current_time,ALG_SRTN);
+    double avg_wta = (finished_count > 0) ? total_wta / finished_count : 0.0;
+    double avg_waiting = (finished_count > 0) ? total_waiting / finished_count : 0.0;
 
-            current_process = Hpri;
-
-            if(current_process->P.DependencyID != -1){
-                temp = getPCB(current_process->P.DependencyID);
-                Pri_inh(current_process,temp);
-                printSchedulerLogFile(current_process, "stopped");
-
-                switch_process(current_process,temp,current_time,ALG_HPF);
-                current_process->state=BLOCKED;
-                current_process=temp;
-            }            
-        }    
-    }
-}
-
-//calc CPU utilization = (processing time)/(total time taken) *100
-/*void Util()
-{
-    double pt=0;
-    int tot=0;
-    for(int i=0; i<process_count;i++)
-    {
-        pt+=(double)all_processes[i].P.Runtime;
-        if(all_processes[i].finish_time > tot){
-            tot = all_processes[i].finish_time;
+    double variance = 0.0;
+    for (int i = 0; i < process_count; i++) {
+        if (all_processes[i].state == FINISHED) {
+            int TA = all_processes[i].finish_time - all_processes[i].P.ArrivalTime;
+            double WTA = (double)TA / (double)all_processes[i].P.Runtime;
+            variance += (WTA - avg_wta) * (WTA - avg_wta);
         }
     }
-    util= (pt/tot)*100.0;
-}*/
+    double std_wta = (finished_count > 0) ? sqrt(variance / finished_count) : 0.0;
 
-//turnaround = finish - arr
-void turn()
-{
-    for(int i=0;i<process_count;i++){
-        all_processes[i].turnaround = all_processes[i].finish_time - all_processes[i].P.ArrivalTime;
+    double cpu_util = (last_finish_time > 0) ? 
+        (100.0 * total_runtime) / last_finish_time : 0.0;
+
+    FILE* perfFile = fopen("scheduler.perf", "w");
+    if (perfFile) {
+        fprintf(perfFile, "CPU utilization = %.2f%%\n", cpu_util);
+        fprintf(perfFile, "Avg WTA = %.2f\n", avg_wta);
+        fprintf(perfFile, "Avg Waiting = %.2f\n", avg_waiting);
+        fprintf(perfFile, "Std WTA = %.2f\n", std_wta);
+        fclose(perfFile);
+        printf("Performance file generated successfully\n");
+        fflush(stdout);
+    } else {
+        perror("fopen scheduler.perf");
     }
 }
 
-//Weighted turnaround = turn/running
-void Weighted(){
-    for(int i=0;i<process_count;i++)
-    {
-        all_processes[i].Wta=(double)all_processes[i].turnaround/all_processes[i].P.Runtime;
-    }
-}
-//avg weighted = total weighted/number of processes
-/*void Avg_Weighted()
-{
-    double twt=0;
-    for(int i=0;i<process_count;i++)
-    {
-        twt+=(double) all_processes[i].Wta;
-    }
-    avgweight=twt/process_count;
-}*/
-
-//waiting time= turnaround-runtime
-//avg waiting = total waiting/number
-void waiting(){
-    for(int i=0;i<process_count;i++)
-    {
-        all_processes[i].waiting_time=all_processes[i].turnaround-all_processes[i].P.Runtime;
-    }
-}
-/*void Avg_wait(){
-    double tw=0;
-    for(int i=0;i<process_count;i++)
-    {
-        tw+=(double)all_processes[i].waiting_time;
-    }
-
-    avgwait=tw/process_count;
-}*/
-
-//standard dev avg weighted = sqrt((sum of (avg weighted - weighted))^2/number)
-/*void standard_dev()
-{
-    double tot=0;
-    double sum=0;
-    for(int i=0; i<process_count;i++)
-    {
-        tot=avgweight-all_processes[i].Wta;
-        sum+= tot*tot;
-    }
-
-    standard=sqrt(sum/process_count);
-}*/
-
-/* Cleanup resources and exit */
 void cleanup_and_exit() {
+    generate_perf_file();
     if (msgid != -1) msgctl(msgid, IPC_RMID, NULL);
     if (logFile) fclose(logFile);
     destroyClk(true);
     exit(0);
 }
 
-int main(int argc, char * argv[])
-{
-    initClk(); 
-    
-    // ftok to match process gen
-    key_t key_id = ftok("/tmp", 'M');
+int main(int argc, char* argv[]) {
+    initClk();
+
+    FILE* kf = fopen("keyfile", "a");
+    if (kf) fclose(kf);
+
+    key_t key_id = ftok("keyfile", 65);
+    if (key_id == -1) {
+        perror("ftok");
+        destroyClk(true);
+        return 1;
+    }
     msgid = msgget(key_id, 0666 | IPC_CREAT);
+    if (msgid == -1) {
+        perror("msgget");
+        destroyClk(true);
+        return 1;
+    }
 
-    //recieve algorithm
     struct AlgorithmMsg alg_msg;
-    msgrcv(msgid, &alg_msg, sizeof(alg_msg.mtext), 1, 0);
+    if (msgrcv(msgid, &alg_msg, sizeof(alg_msg.mtext), 1, 0) == -1) {
+        perror("msgrcv alg");
+        cleanup_and_exit();
+    }
 
-    //allocate memory for PCB
+    printf("Received algorithm: %s\n", alg_msg.mtext);
+    fflush(stdout);
+
+    if (strncmp(alg_msg.mtext, "RR", 2) == 0) {
+        char* sp = strchr(alg_msg.mtext, ' ');
+        if (sp) {
+            int q = atoi(sp + 1);
+            if (q > 0) quantum = q;
+        }
+        printf("Running Round Robin with quantum = %d\n", quantum);
+        fflush(stdout);
+    }
+
     current_process = malloc(sizeof(struct PCB));
-    current_process->P.PID = -1; // -1 means CPU is Idle
+    if (!current_process) {
+        perror("malloc");
+        cleanup_and_exit();
+    }
+    current_process->P.PID = -1;
     current_process->start_time = -1;
+    current_process->state = READY;
+    current_process->waiting_time = 0;
+    current_process->last_start_time = -1;
+    current_process->blocked = 0;
+    current_process->unblock_time = -1;
+    current_process->blockedID = -1;
+
+    logFile = fopen("scheduler.log", "w");
+    if (!logFile) {
+        perror("fopen scheduler.log");
+        cleanup_and_exit();
+    }
+    fprintf(logFile, "#At time x process y state arr w total z remain y wait k\n");
+    fflush(logFile);
+    printf("Log file opened successfully\n");
+    fflush(stdout);
 
     int prev_time = -1;
 
-    /* open log */
-    logFile = fopen("scheduler.log", "w");
-    if (!logFile) { perror("fopen scheduler.log"); cleanup_and_exit(); }
-    fprintf(logFile, "#At time x process y state arr w total z remain y wait k\n");
-    fflush(logFile);
-
     while (1) {
         int clock_time = getClk();
-        if (clock_time == prev_time) continue; //if clk somehow didnt increase, skip
+        if (clock_time == prev_time) {
+            usleep(1000);
+            continue;
+        }
         prev_time = clock_time;
 
-        // check for finished processes
-        int status;
-        pid_t finished_pid;
-        struct PCB* depfree;
-        int fid;
-        while ((finished_pid = waitpid(-1, &status, WNOHANG)) > 0) { //wait for child to finish,if no one finished dont block
-            update_alllist_finish(finished_pid, clock_time);
-            
-            // if finished process was running on CPU
-            if (current_process->P.PID != -1 && current_process->P.PID == finished_pid) {
-                current_process->P.RemainingTime = 0;
-                current_process->state = FINISHED;
-                current_process->P.PID = -1; //CPU is now Idle
-                fid = current_process->blockedID; //free blocked process and restore pri
-                if (fid != -1)
-                {
-                    depfree=getPCB(fid);
-                    depfree->state= READY;
-                    enqueue(&ready_queue, depfree, ALG_HPF);
-                    Pri_rev(current_process);
+        /* Wake up BLOCKED processes */
+        for (int i = 0; i < blocked_count; i++) {
+            if (clock_time >= blocked_list[i].unblock_time) {
+                blocked_list[i].blocked = 0;
+                blocked_list[i].state = READY;
+
+                if (strncmp(alg_msg.mtext, "RR", 2) == 0) {
+                    enqueueRR(&RR_head, &RR_tail, blocked_list[i]);
+                } else {
+                    Algorithm alg = (strcmp(alg_msg.mtext, "SRTN") == 0) ? ALG_SRTN : ALG_HPF;
+                    enqueue(&ready_queue, &blocked_list[i], alg);
                 }
+
+                for (int j = i; j < blocked_count - 1; j++)
+                    blocked_list[j] = blocked_list[j + 1];
+
+                blocked_count--;
+                i--;
             }
         }
 
-        //update remaining time
-        // if (current_process->P.PID != -1) {
-        //     current_process->P.RemainingTime--;
-        // }
+        /* Reap finished children */
+        int status;
+        pid_t finished_pid;
+        while ((finished_pid = waitpid(-1, &status, WNOHANG)) > 0) {
+            update_master_list_finish(finished_pid, clock_time);
 
-        //receive new processes & Create PCB
-        struct ProcessMsg proc_msg; //mtype=2
-        while (msgrcv(msgid, &proc_msg, sizeof(proc_msg.process), 2, IPC_NOWAIT) != -1) { //if message recieves, then !=-1
-            struct PCB new_proc;
-            new_proc = proc_msg.process;
+            struct PCB* m = find_master_by_pid(finished_pid);
+            if (m != NULL) {
+                m->finish_time = clock_time;
+                m->state = FINISHED;
+                m->waiting_time = (clock_time - m->P.ArrivalTime) - m->P.Runtime;
+
+                printSchedulerLogFile(m, "finished");
+
+                // HPF: Free blocked process with priority inheritance
+                if (strcmp(alg_msg.mtext, "HPF") == 0 && m->blockedID != -1) {
+                    struct PCB* depfree = getPCB(m->blockedID);
+                    if (depfree) {
+                        depfree->state = READY;
+                        enqueue(&ready_queue, depfree, ALG_HPF);
+                        Pri_rev(m);
+                    }
+                }
+            }
+
+            if (current_process->P.PID == finished_pid) {
+                current_process->P.PID = -1;
+                current_process->state = FINISHED;
+            }
+        }
+
+        /* Update remaining time for running process */
+        if (current_process->state == RUNNING && current_process->P.PID != -1) {
+            if (current_process->P.RemainingTime > 0) {
+                current_process->P.RemainingTime--;
+            }
+        }
+
+        /* Memory access while RUNNING (Phase 2) */
+        if (current_process->state == RUNNING && current_process->P.PID != -1) {
+            int mmu_result = MMU_access(current_process);
+
+            if (mmu_result == 1) {
+                printSchedulerLogFile(current_process, "stopped");
+                kill(current_process->P.PID, SIGSTOP);
+
+                current_process->blocked = 1;
+                current_process->state = BLOCKED;
+                current_process->unblock_time = clock_time + 10;
+
+                blocked_list[blocked_count++] = *current_process;
+
+                current_process->P.PID = -1;
+                current_process->state = READY;
+                runningProcessStartTime = 0;
+                runningProcessEndTime = 0;
+            }
+        }
+
+        /* Receive new processes */
+        struct ProcessMsg proc_msg;
+        while (msgrcv(msgid, &proc_msg, sizeof(proc_msg.process), 2, IPC_NOWAIT) != -1) {
+            struct PCB new_proc = proc_msg.process;
+
+            printf("Received process: PID=%d, Arrival=%d, Runtime=%d at time %d\n",
+                   new_proc.P.PID, new_proc.P.ArrivalTime, new_proc.P.Runtime, clock_time);
+            fflush(stdout);
+
+            if (new_proc.P.Runtime <= 0)
+                new_proc.P.Runtime = 1;
+
+            new_proc.P.RemainingTime = new_proc.P.Runtime;
+            new_proc.state = READY;
+            new_proc.start_time = -1;
+            new_proc.finish_time = -1;
+            new_proc.waiting_time = 0;
+            new_proc.last_start_time = -1;
+            new_proc.blocked = 0;
+            new_proc.unblock_time = -1;
+            new_proc.blockedID = -1;
+            new_proc.depp = false;
             
-            //add to all processes
-            all_processes[process_count++] = new_proc;
-            
-            //add to ready queue
+            // IMPORTANT: Update arrival time to actual arrival time in the system
+            new_proc.P.ArrivalTime = clock_time;
+
+            if (process_count < MAX_PROCESSES)
+                all_processes[process_count++] = new_proc;
+
             if (strcmp(alg_msg.mtext, "SRTN") == 0) {
                 enqueue(&ready_queue, &new_proc, ALG_SRTN);
-            }
-            else if (strcmp(alg_msg.mtext, "HPF") == 0) {
-                // Enqueue logic for HPF 
+            } else if (strcmp(alg_msg.mtext, "HPF") == 0) {
                 enqueue(&ready_queue, &new_proc, ALG_HPF);
-            }
-            else if (strcmp(alg_msg.mtext, "RR") == 0) {
+            } else if (strncmp(alg_msg.mtext, "RR", 2) == 0) {
                 enqueueRR(&RR_head, &RR_tail, new_proc);
             }
         }
 
-        //if no new process, just keep running agorithm
+        /* Run appropriate scheduler */
         if (strcmp(alg_msg.mtext, "SRTN") == 0) {
             SRTN_scheduler(clock_time);
-        }
-        else if (strcmp(alg_msg.mtext, "HPF") == 0) {
-            // HPF Scheduler Logic
-            HPF_Sched(clock_time);
-        }
-        else if (strcmp(alg_msg.mtext, "RR") == 0) {
+        } else if (strcmp(alg_msg.mtext, "HPF") == 0) {
+            HPF_scheduler(clock_time);
+        } else if (strncmp(alg_msg.mtext, "RR", 2) == 0) {
             RR_scheduler(clock_time);
         }
 
-        //check if all finished
-        int all_done = 1;
+        /* Termination check */
         if (process_count > 0) {
-            for(int i = 0; i < process_count; i++) {
+            int all_done = 1;
+            for (int i = 0; i < process_count; i++) {
                 if (all_processes[i].state != FINISHED) {
                     all_done = 0;
                     break;
                 }
             }
-            if (all_done && ready_queue == NULL && current_process->P.PID == -1) {
+
+            int queue_empty = (strncmp(alg_msg.mtext, "RR", 2) == 0) ? 
+                              (RR_head == NULL) : (ready_queue == NULL);
+
+            if (all_done && queue_empty && current_process->P.PID == -1) {
+                printf("All %d processes finished at time %d\n", process_count, clock_time);
+                fflush(stdout);
                 break;
             }
         }
-    }
 
-    double pt=0.0;
-    int tot=0;
-    for(int i=0; i<process_count;i++)
-    {
-        pt+=(double)all_processes[i].P.Runtime;
-        if(all_processes[i].finish_time > tot){
-            tot = all_processes[i].finish_time;
+        if (clock_time > 1000) {
+            printf("Timeout at time %d with %d processes\n", clock_time, process_count);
+            fflush(stdout);
+            break;
         }
     }
-    if(tot!=0)
-    util= round((pt/tot)*100.0 *100.0)/100.0; //utilization
 
-    turn(); //turnover for each
-    Weighted();//weighted for each
+    generate_perf_file();
 
-    double twt=0.0;
-    for(int i=0;i<process_count;i++)
-    {
-        twt+=(double) all_processes[i].Wta;
-    }
-    avgweight=round((twt/process_count)*100.0)/100.0; //average weighted
-
-    waiting(); //waiting for each
-    double tw=0.0;
-    for(int i=0;i<process_count;i++)
-    {
-        tw+=(double)all_processes[i].waiting_time;
-    }
-    avgwait=round((tw/process_count)*100.0)/100.0; //average waiting
-
-    double dif=0.0;
-    double sum=0.0;
-    for(int i=0; i<process_count;i++)
-    {
-        dif=avgweight-all_processes[i].Wta;
-        sum+= dif*dif;
-    }
-
-    standard=round((sqrt(sum/process_count))*100.0)/100.0; //standard dev
-
-    FILE* perf = fopen("scheduler.perf", "w");
-    if (perf) {
-        fprintf(perf, "CPU utilization = %.2f%%\n", util);
-        fprintf(perf, "Avg WTA = %.2f\n", avgweight);
-        fprintf(perf, "Avg Waiting = %.2f\n", avgwait);
-        fprintf(perf, "Std WTA = %.2f\n", standard);
-        fclose(perf);
-    } else {
-        perror("fopen scheduler.perf");
-    }
-
-
-    free(current_process);
-    current_process = NULL;
-    msgctl(msgid, IPC_RMID, NULL);//destroy message queue
+    if (msgid != -1) msgctl(msgid, IPC_RMID, NULL);
     if (logFile) fclose(logFile);
     destroyClk(true);
+    
+    printf("Scheduler terminated successfully\n");
     return 0;
 }
-
-    //TODO implement the scheduler :)
-    //upon termination release the clock resources.
-
-
-
-    
-    //ready queue -> queues from ds
-    //1-Implement Shortest Remaining Time Next (SRTN) (preemptive shortest remaining time). (DONE)
-
-    //2- Implement process start: fork + exec (give child its params). (DONE)
-
-    //3- Implement process switch: stop old process (SIGSTOP), save state (PCB fields), resume new (SIGCONT). (DONE)
-    //take input to see which process to run
-
-    //4- Maintain PCB for each process (state, remaining, arrival, start/finish times, pid, wait times, WTA/TA).(DONE)
-
-    //5- Maintain ready queue optimized for SRTN.
-
-    //6-React to process arrivals (from process_generator) and process termination notifications (from children / process).
-
-    //7-Produce Scheduler.log (events) and Scheduler.perf (final metrics).
-
-    //8-Clean up IPC on exit.
-  
-
-
-    /*
-    * Implement the Shortest Remaining Time Next (SRTN) scheduling algorithm.
-    * Implement the logic to switch between two processes (stop the old, save its state, start/resume another).
-    * Implement the logic to start a new process (fork it and give it its parameters).
-    * Manage the Process Control Block (PCB) for each process, keeping track of its state (running/waiting), remaining time, etc..
-    * Define and manage the ready queue data structure for the SRTN algorithm.
-    */
-
-    
