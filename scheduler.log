@@ -1,5 +1,11 @@
 #At time x process y state arr w total z remain y wait k
-At time 10 process 30513 started arr 10 total 3 remain 3 wait 0
-At time 12 process 30513 stopped arr 10 total 3 remain 1 wait 0
-At time 12 process 30513 resumed arr 10 total 3 remain 1 wait 2
-At time 13 process 30513 finished arr 10 total 3 remain 0 wait 0 TA 3 WTA 1.00
+At time 10 process 50084 started arr 10 total 3 remain 3 wait 0
+At time 13 process 50084 finished arr 10 total 3 remain 0 wait 0 TA 3 WTA 1.00
+At time 20 process 50120 started arr 20 total 5 remain 5 wait 0
+At time 25 process 50120 finished arr 20 total 5 remain 0 wait 0 TA 5 WTA 1.00
+At time 25 process 50152 started arr 21 total 30 remain 30 wait 4
+At time 28 process 50152 stopped arr 21 total 30 remain 27 wait 4
+At time 28 process 50184 started arr 28 total 7 remain 7 wait 0
+At time 35 process 50184 finished arr 28 total 7 remain 0 wait 0 TA 7 WTA 1.00
+At time 35 process 50152 resumed arr 21 total 30 remain 27 wait 11
+At time 61 process 50152 finished arr 21 total 30 remain 0 wait 10 TA 40 WTA 1.33
