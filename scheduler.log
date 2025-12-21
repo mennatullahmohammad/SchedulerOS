@@ -1,11 +1,43 @@
 #At time x process y state arr w total z remain y wait k
-At time 10 process 50084 started arr 10 total 3 remain 3 wait 0
-At time 13 process 50084 finished arr 10 total 3 remain 0 wait 0 TA 3 WTA 1.00
-At time 20 process 50120 started arr 20 total 5 remain 5 wait 0
-At time 25 process 50120 finished arr 20 total 5 remain 0 wait 0 TA 5 WTA 1.00
-At time 25 process 50152 started arr 21 total 30 remain 30 wait 4
-At time 28 process 50152 stopped arr 21 total 30 remain 27 wait 4
-At time 28 process 50184 started arr 28 total 7 remain 7 wait 0
-At time 35 process 50184 finished arr 28 total 7 remain 0 wait 0 TA 7 WTA 1.00
-At time 35 process 50152 resumed arr 21 total 30 remain 27 wait 11
-At time 61 process 50152 finished arr 21 total 30 remain 0 wait 10 TA 40 WTA 1.33
+At time 10 process 5190 started arr 10 total 3 remain 3 wait 0
+At time 12 process 5190 stopped arr 10 total 3 remain 1 wait 0
+At time 12 process 5190 resumed arr 10 total 3 remain 1 wait 0
+At time 13 process 5190 finished arr 10 total 3 remain 0 wait 0 TA 3 WTA 1.00
+At time 20 process 5226 started arr 20 total 5 remain 5 wait 0
+At time 22 process 5226 stopped arr 20 total 5 remain 3 wait 0
+At time 22 process 5244 started arr 21 total 30 remain 30 wait 1
+At time 24 process 5244 stopped arr 21 total 30 remain 28 wait 1
+At time 24 process 5226 resumed arr 20 total 5 remain 3 wait 2
+At time 26 process 5226 finished arr 20 total 5 remain 0 wait 1 TA 6 WTA 1.20
+At time 26 process 5244 resumed arr 21 total 30 remain 28 wait 3
+At time 28 process 5244 stopped arr 21 total 30 remain 26 wait 3
+At time 28 process 5287 started arr 28 total 7 remain 7 wait 0
+At time 30 process 5287 stopped arr 28 total 7 remain 5 wait 0
+At time 30 process 5244 resumed arr 21 total 30 remain 26 wait 5
+At time 32 process 5244 stopped arr 21 total 30 remain 24 wait 5
+At time 32 process 5287 resumed arr 28 total 7 remain 5 wait 2
+At time 34 process 5287 stopped arr 28 total 7 remain 3 wait 2
+At time 34 process 5244 resumed arr 21 total 30 remain 24 wait 7
+At time 36 process 5244 stopped arr 21 total 30 remain 22 wait 7
+At time 36 process 5287 resumed arr 28 total 7 remain 3 wait 4
+At time 37 process 5287 finished arr 28 total 7 remain 0 wait 2 TA 9 WTA 1.29
+At time 37 process 5244 resumed arr 21 total 30 remain 22 wait 8
+At time 39 process 5244 stopped arr 21 total 30 remain 20 wait 8
+At time 39 process 5244 resumed arr 21 total 30 remain 20 wait 8
+At time 41 process 5244 stopped arr 21 total 30 remain 18 wait 8
+At time 41 process 5244 resumed arr 21 total 30 remain 18 wait 8
+At time 43 process 5244 stopped arr 21 total 30 remain 16 wait 8
+At time 43 process 5244 resumed arr 21 total 30 remain 16 wait 8
+At time 45 process 5244 stopped arr 21 total 30 remain 14 wait 8
+At time 45 process 5244 resumed arr 21 total 30 remain 14 wait 8
+At time 47 process 5244 stopped arr 21 total 30 remain 12 wait 8
+At time 47 process 5244 resumed arr 21 total 30 remain 12 wait 8
+At time 49 process 5244 stopped arr 21 total 30 remain 10 wait 8
+At time 49 process 5244 resumed arr 21 total 30 remain 10 wait 8
+At time 51 process 5244 stopped arr 21 total 30 remain 8 wait 8
+At time 51 process 5244 resumed arr 21 total 30 remain 8 wait 8
+At time 53 process 5244 stopped arr 21 total 30 remain 6 wait 8
+At time 53 process 5244 resumed arr 21 total 30 remain 6 wait 8
+At time 55 process 5244 stopped arr 21 total 30 remain 4 wait 8
+At time 55 process 5244 resumed arr 21 total 30 remain 4 wait 8
+At time 56 process 5244 finished arr 21 total 30 remain 0 wait 5 TA 35 WTA 1.17

@@ -303,7 +303,8 @@ void RR_scheduler(int current_time) {
                         current_process->last_start_time = current_time;
                         printSchedulerLogFile(current_process, "resumed");
                     }
-                } else {
+                } 
+                else {
                     start_new_process(current_process, current_time);
                     current_process->waiting_time = current_time - current_process->P.ArrivalTime;
                     printSchedulerLogFile(current_process, "started");
