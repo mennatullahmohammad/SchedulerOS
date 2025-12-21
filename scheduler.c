@@ -298,7 +298,8 @@ void RR_scheduler(int current_time) {
                         current_process->last_start_time = current_time;
                         printSchedulerLogFile(current_process, "resumed");
                     }
-                } else {
+                } 
+                else {
                     start_new_process(current_process, current_time);
                     current_process->waiting_time = current_time - current_process->P.ArrivalTime;
                     printSchedulerLogFile(current_process, "started");
@@ -325,6 +326,7 @@ void RR_scheduler(int current_time) {
 
             struct PCB copyPCB = *current_process;
             copyPCB.state = READY;
+            copyPCB.last_start_time = getClk();
             enqueueRR(&RR_head, &RR_tail, copyPCB);
 
             current_process->P.PID = -1;
@@ -432,6 +434,7 @@ void cleanup_and_exit() {
 int main(int argc, char* argv[]) {
     int generator_done = 0;
     initClk();
+    int all_processes_sent = 0;
 
     key_t queue_key = ftok("/tmp", 'M');
     if (queue_key == -1) {
@@ -633,9 +636,16 @@ int main(int argc, char* argv[]) {
         } else if (strncmp(alg_msg.mtext, "RR", 2) == 0) {
             RR_scheduler(clock_time);
         }
+        
+        struct ProcessMsg end_msg;
+        if (msgrcv(msgid, &end_msg, sizeof(end_msg.proc), 3, IPC_NOWAIT) != -1) {
+            all_processes_sent = 1;
+            printf("Received end of processes signal at time %d\n", clock_time);
+            fflush(stdout);
+        }
 
         /* Termination check */
-        if (process_count > 0) {
+        if (process_count > 0 && all_processes_sent) {
             int all_done = 1;
             for (int i = 0; i < process_count; i++) {
                 if (all_processes[i].state != FINISHED) {
