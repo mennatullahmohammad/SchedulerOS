@@ -104,6 +104,8 @@ struct PCB {
     proc_state state;  //one of the enums 0,1,2
     bool depp; //does it have others depending on it?
     int blockedID; //process blocked by it (-1 when nonexistant)
+    int blocked;
+    int unblock_time;
 };
 
 //Linked List DS definition

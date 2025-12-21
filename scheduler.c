@@ -88,7 +88,7 @@ void update_master_list_finish(pid_t pid, int time) {
         if (all_processes[i].P.PID == pid) {
             all_processes[i].finish_time = time;
             all_processes[i].state = FINISHED;
-            all_processes[i].P.RemainingTime = 0;
+            all_processes[i].RemainingTime = 0;
             return;
         }
     }
@@ -102,13 +102,13 @@ void printSchedulerLogFile(struct PCB* p, const char* state) {
 
     if (strcmp(state, "started") == 0) {
         fprintf(logFile, "At time %d process %d started arr %d total %d remain %d wait %d\n",
-                t, printed_pid, p->P.ArrivalTime, p->P.Runtime, p->P.RemainingTime, p->waiting_time);
+                t, printed_pid, p->P.ArrivalTime, p->P.Runtime, p->RemainingTime, p->waiting_time);
     } else if (strcmp(state, "resumed") == 0) {
         fprintf(logFile, "At time %d process %d resumed arr %d total %d remain %d wait %d\n",
-                t, printed_pid, p->P.ArrivalTime, p->P.Runtime, p->P.RemainingTime, p->waiting_time);
+                t, printed_pid, p->P.ArrivalTime, p->P.Runtime, p->RemainingTime, p->waiting_time);
     } else if (strcmp(state, "stopped") == 0) {
         fprintf(logFile, "At time %d process %d stopped arr %d total %d remain %d wait %d\n",
-                t, printed_pid, p->P.ArrivalTime, p->P.Runtime, p->P.RemainingTime, p->waiting_time);
+                t, printed_pid, p->P.ArrivalTime, p->P.Runtime, p->RemainingTime, p->waiting_time);
     } else if (strcmp(state, "finished") == 0) {
         int TA = p->finish_time - p->P.ArrivalTime;
         if (TA < 0) TA = getClk() - p->P.ArrivalTime;
@@ -169,7 +169,7 @@ void switch_process(struct PCB* old_proc, struct PCB* new_proc, int current_time
 /* Priority Inheritance (for HPF) */
 void Pri_inh(struct PCB* b, struct PCB* dep) {
     if (b->P.Priority > dep->P.Priority) {
-        dep->P.expri = dep->P.Priority;
+        dep->expri = dep->P.Priority;
         dep->P.Priority = b->P.Priority;
         dep->depp = true;
         dep->blockedID = b->P.PID;
@@ -177,7 +177,7 @@ void Pri_inh(struct PCB* b, struct PCB* dep) {
 }
 
 void Pri_rev(struct PCB* dep) {
-    dep->P.Priority = dep->P.expri;
+    dep->P.Priority = dep->expri;
 }
 
 //SRTN Scheduler 
@@ -203,7 +203,7 @@ void SRTN_scheduler(int current_time) {
     }
     // CPU is Busy, check for preemption
     else if (current_process->P.PID != -1 && shortest_job != NULL) {
-        if (shortest_job->P.RemainingTime < current_process->P.RemainingTime) {
+        if (shortest_job->RemainingTime < current_process->RemainingTime) {
             struct PCB next_proc;
             dequeue(&ready_queue, &next_proc);
             
@@ -308,7 +308,7 @@ void RR_scheduler(int current_time) {
                 }
             }
 
-            int rem = current_process->P.RemainingTime;
+            int rem = current_process->RemainingTime;
             if (rem <= 0) rem = current_process->P.Runtime;
             runningProcessStartTime = current_time;
             runningProcessEndTime = current_time + ((rem >= quantum) ? quantum : rem);
@@ -362,7 +362,7 @@ void RR_scheduler(int current_time) {
                 }
             }
 
-            int rem2 = current_process->P.RemainingTime;
+            int rem2 = current_process->RemainingTime;
             if (rem2 <= 0) rem2 = current_process->P.Runtime;
             runningProcessStartTime = getClk();
             runningProcessEndTime = runningProcessStartTime + ((rem2 >= quantum) ? quantum : rem2);
@@ -558,8 +558,8 @@ int main(int argc, char* argv[]) {
 
         /* Update remaining time for running process */
         if (current_process->state == RUNNING && current_process->P.PID != -1) {
-            if (current_process->P.RemainingTime > 0) {
-                current_process->P.RemainingTime--;
+            if (current_process->RemainingTime > 0) {
+                current_process->RemainingTime--;
             }
         }
 
@@ -586,8 +586,9 @@ int main(int argc, char* argv[]) {
 
         /* Receive new processes */
         struct ProcessMsg proc_msg;
-        while (msgrcv(msgid, &proc_msg, sizeof(proc_msg.process), 2, IPC_NOWAIT) != -1) {
-            struct PCB new_proc = proc_msg.process;
+        while (msgrcv(msgid, &proc_msg, sizeof(proc_msg.proc), 2, IPC_NOWAIT) != -1) {
+            struct PCB new_proc;
+            new_proc.P= proc_msg.proc;
 
             printf("Received process: PID=%d, Arrival=%d, Runtime=%d at time %d\n",
                    new_proc.P.PID, new_proc.P.ArrivalTime, new_proc.P.Runtime, clock_time);
@@ -596,7 +597,7 @@ int main(int argc, char* argv[]) {
             if (new_proc.P.Runtime <= 0)
                 new_proc.P.Runtime = 1;
 
-            new_proc.P.RemainingTime = new_proc.P.Runtime;
+            new_proc.RemainingTime = new_proc.P.Runtime;
             new_proc.state = READY;
             new_proc.start_time = -1;
             new_proc.finish_time = -1;
