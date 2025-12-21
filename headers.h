@@ -140,6 +140,11 @@ struct DoneMsg {
     char dummy[1]; // Just a placeholder
 };
 
+struct FinishMsg {
+    long mtype;           // message type = 4
+    pid_t pid;            // process PID
+    int finish_time;      // time when finished
+};
 typedef enum { ALG_SRTN, ALG_HPF } Algorithm;
 
 bool enqueue(struct Node** head, struct PCB *p, Algorithm alg)

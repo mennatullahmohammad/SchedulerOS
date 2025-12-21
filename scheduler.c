@@ -528,11 +528,15 @@ int main(int argc, char* argv[]) {
                 i--;
             }
         }
-
-        /* Reap finished children */
-        int status;
-        pid_t finished_pid;
-        while ((finished_pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        //notification from process that it finished, dont blocl
+        struct FinishMsg finish_msg;
+        while (msgrcv(msgid, &finish_msg, sizeof(finish_msg) - sizeof(long), 4, IPC_NOWAIT) != -1) {
+            pid_t finished_pid = finish_msg.pid;
+            
+            // Reap the finished process
+            int status;
+            waitpid(finished_pid, &status, 0);
+            
             update_master_list_finish(finished_pid, clock_time);
 
             struct PCB* m = find_master_by_pid(finished_pid);
@@ -546,17 +550,16 @@ int main(int argc, char* argv[]) {
                 // HPF: Free blocked processes with priority inheritance
                 if (strcmp(alg_msg.mtext, "HPF") == 0 && m->count != 0) {
                     struct PCB* depfree;
-                    for (int i=0; i<= m->count ; i++)
-                    {
+                    for (int i = 0; i <= m->count; i++) {
                         depfree = getPCB(m->blockedID[i]);
                         if (depfree) {
-                        depfree->state = READY;
-                        enqueue(&ready_queue, depfree, ALG_HPF);
+                            depfree->state = READY;
+                            enqueue(&ready_queue, depfree, ALG_HPF);
                         }
                     }
-                    Pri_rev(m); //return original expri
+                    Pri_rev(m);
                     m->depp = false;
-                    m->count=0;
+                    m->count = 0;
                 }
             }
 
@@ -572,7 +575,7 @@ int main(int argc, char* argv[]) {
                 current_process->RemainingTime--;
             }
         }
-
+        
         /* Memory access while RUNNING (Phase 2) */
         if (current_process->state == RUNNING && current_process->P.PID != -1) {
             int mmu_result = MMU_access(current_process);
