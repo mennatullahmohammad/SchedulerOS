@@ -435,6 +435,7 @@ void cleanup_and_exit() {
 }
 
 int main(int argc, char* argv[]) {
+    int generator_done = 0;
     initClk();
 
     key_t queue_key = ftok("/tmp", 'M');
@@ -585,6 +586,7 @@ int main(int argc, char* argv[]) {
 
         /* Receive new processes */
         struct ProcessMsg proc_msg;
+        struct DoneMsg done_msg; 
         while (msgrcv(msgid, &proc_msg, sizeof(proc_msg.proc), 2, IPC_NOWAIT) != -1) {
             struct PCB new_proc;
             new_proc.P= proc_msg.proc;
@@ -607,9 +609,6 @@ int main(int argc, char* argv[]) {
             //new_proc.blockedID = -1; it's an array
             new_proc.depp = false;
             new_proc.count = 0; //for blocked array
-            
-            // IMPORTANT: Update arrival time to actual arrival time in the system
-            //new_proc.P.ArrivalTime = clock_time;
 
             if (process_count < MAX_PROCESSES)
                 all_processes[process_count++] = new_proc;
@@ -642,10 +641,16 @@ int main(int argc, char* argv[]) {
                 }
             }
 
+       if (!generator_done && msgrcv(msgid, &done_msg, sizeof(done_msg.dummy), 3, IPC_NOWAIT) != -1)
+        {
+            generator_done = 1;
+            printf("Generator done received at time %d, generatordone = %d\n", getClk(), generator_done);
+        }
+
             int queue_empty = (strncmp(alg_msg.mtext, "RR", 2) == 0) ? 
                               (RR_head == NULL) : (ready_queue == NULL);
 
-            if (all_done && queue_empty && current_process->P.PID == -1) {
+            if (generator_done && all_done && queue_empty && current_process->P.PID == -1) {
                 printf("All %d processes finished at time %d\n", process_count, clock_time);
                 fflush(stdout);
                 break;

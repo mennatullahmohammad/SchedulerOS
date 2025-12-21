@@ -135,6 +135,11 @@ struct ProcessMsg {
     struct Process proc;
 };
 
+struct DoneMsg {
+    long mtype;  // MUST be long
+    char dummy[1]; // Just a placeholder
+};
+
 typedef enum { ALG_SRTN, ALG_HPF } Algorithm;
 
 bool enqueue(struct Node** head, struct PCB *p, Algorithm alg)

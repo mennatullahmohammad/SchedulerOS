@@ -73,6 +73,7 @@ int main(int argc, char * argv[])
 
     struct AlgorithmMsg alg;
     struct ProcessMsg proc;
+    struct DoneMsg done;
 
         printf("Which Algorithm do you want to use? (HPF, SRTN, RR)");
 
@@ -127,8 +128,12 @@ int main(int argc, char * argv[])
 
         }      
         
-        proc.mtype = 3; // Message type for end of processes
-        msgsnd(queue_id, &proc, 0, 0);
+        done.mtype = 3; // Message type for end of processes
+        done.dummy[0] = 0;
+        if (msgsnd(queue_id, &done, sizeof(done.dummy), 0) == -1) {
+        perror("Error sending generator done message");
+        exit(1);
+        }
         // Wait for scheduler to finish
         waitpid(sched, NULL, 0);
     // TODO Generation Main Loop
