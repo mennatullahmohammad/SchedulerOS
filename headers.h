@@ -84,8 +84,6 @@ struct Process {
     int Runtime;   
     int Priority;
     int DependencyID;
-    int RemainingTime;
-    int expri; //for pri inheritance
 };
 
 
@@ -95,6 +93,8 @@ typedef enum {READY, RUNNING, FINISHED, BLOCKED} proc_state;
 //pcb struct
 struct PCB {
     struct Process P;
+    int RemainingTime;
+    int expri; //for pri inheritance
     int start_time;    
     int finish_time;   
     int last_start_time;
@@ -129,7 +129,7 @@ struct AlgorithmMsg {
 
 struct ProcessMsg {
     long mtype;         
-    struct PCB process;
+    struct Process proc;
 };
 
 typedef enum { ALG_SRTN, ALG_HPF } Algorithm;
@@ -153,7 +153,7 @@ bool enqueue(struct Node** head, struct PCB *p, Algorithm alg)
     struct Node* cur = *head;
 
     // Case 2: new node should be head
-    if ((alg == ALG_SRTN  && p->P.RemainingTime < cur->Entry.P.RemainingTime) ||
+    if ((alg == ALG_SRTN  && p->RemainingTime < cur->Entry.RemainingTime) ||
         (alg == ALG_HPF   && p->P.Priority > cur->Entry.P.Priority))
     {
         newNode->next = *head;
@@ -163,7 +163,7 @@ bool enqueue(struct Node** head, struct PCB *p, Algorithm alg)
 
     // Case 3: middle insertion
     while (cur->next != NULL &&
-          ((alg == ALG_SRTN && cur->next->Entry.P.RemainingTime <= p->P.RemainingTime) ||
+          ((alg == ALG_SRTN && cur->next->Entry.RemainingTime <= p->RemainingTime) ||
            (alg == ALG_HPF  && cur->next->Entry.P.Priority      >= p->P.Priority)))
     {
         cur = cur->next;

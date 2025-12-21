@@ -15,35 +15,35 @@ int main(int argc, char * argv[])
         return 1; // Indicate an error
     }
 
-    struct Node* Head =  NULL;
+    int process_count = 0;
+
+    while (fgets(buffer, sizeof(buffer), file_ptr)) {
+        if (buffer[0] != '#') { // Skip comment lines
+            process_count++;
+        }
+    }
+
+    rewind(file_ptr);
+
+    // Allocate memory for processes
+    struct Process *processes = malloc(process_count * sizeof(struct Process));
+    if (processes == NULL) {
+        perror("Memory allocation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    int index = 0;
 
     while(fgets(buffer, sizeof(buffer), file_ptr)) 
     {
-        struct Node* temp = malloc(sizeof(struct Node));
-        temp->next = NULL;
-
-        sscanf(buffer, "%d %d %d %d %d",
-           &temp->Entry.P.PID,
-           &temp->Entry.P.ArrivalTime,
-           &temp->Entry.P.Runtime,
-           &temp->Entry.P.Priority,
-           &temp->Entry.P.DependencyID);
-        
-        temp->Entry.P.RemainingTime = temp->Entry.P.Runtime;
-        temp->Entry.waiting_time = temp->Entry.finish_time = 0;
-        temp->Entry.start_time = temp->Entry.last_start_time = -1;
-        temp->Entry.state = READY;
-        temp->Entry.depp = false;
-        temp->Entry.blockedID = -1;
-        temp->Entry.turnaround = 0;
-
-        if (Head == NULL) {
-        Head = temp;
-        } 
-        else {
-        struct Node* curr = Head;
-        while (curr->next != NULL) curr = curr->next;
-        curr->next = temp;
+       if(buffer[0] != '#')
+        {sscanf(buffer, "%d %d %d %d %d",
+           processes[index].PID,
+           processes[index].ArrivalTime,
+           processes[index].Runtime,
+           processes[index].Priority,
+           processes[index].DependencyID);
+           index++;
         }
     }  
 
@@ -59,11 +59,11 @@ int main(int argc, char * argv[])
     key_t queue_key = ftok("/tmp", 'M');
         
     if (queue_key == -1)
-        {
-            printf("error in creating message queue key");
-            exit(1);
+    {
+        printf("error in creating message queue key");
+        exit(1);
         
-        }
+    }
     queue_id = msgget(queue_key, 0666 | IPC_CREAT);
     if (queue_id == -1) 
     {
@@ -73,11 +73,10 @@ int main(int argc, char * argv[])
 
     struct AlgorithmMsg alg;
     struct ProcessMsg proc;
-    pid_t pid = getpid();
 
     
-    pid_t clk = fork();
-    if (clk == 0)
+    pid_t sched = fork();
+    if (sched == 0)
     {
         execl("./scheduler.out", "scheduler.out", NULL);
         perror("execl failed");  // in case exec fails
@@ -97,38 +96,57 @@ int main(int argc, char * argv[])
             exit(1);
         }
 
+        pid_t clock_pid = fork();
+        if (clock_pid == 0) {
+        execl("./clk.out", "clk.out", NULL);
+        perror("Error starting clock");
+        exit(EXIT_FAILURE);
+        }
+
         initClk();
 
-        while (Head != NULL) 
+        int sent_processes = 0;
+        int next_process_index = 0;
+
+        while (sent_processes < process_count) 
         {
-            while (getClk() < Head->Entry.P.ArrivalTime) 
+            while (getClk() < processes[next_process_index].ArrivalTime) 
             {
                 ; // busy wait
             }
 
-            proc.mtype = 2;
-            proc.process = Head->Entry;
-            if (msgsnd(queue_id, &proc, sizeof(proc.process), 0) == -1) 
+            proc.mtype = 1;
+            proc.proc = processes[next_process_index];
+            if (msgsnd(queue_id, &proc, sizeof(proc), 0) == -1) 
             {
                 perror("Error sending process to scheduler");
                 exit(1);
             }
+            sent_processes++;
 
-            struct Node* tmp = Head;
-            Head = Head->next;
-            free(tmp);
-        }       
+        }      
+        
+        proc.mtype = 2; // Message type for end of processes
+        msgsnd(queue_id, &proc, sizeof(proc), 0);
+        // Wait for scheduler to finish
+        waitpid(sched, NULL, 0);
     // TODO Generation Main Loop
     // 5. Create a data structure for processes and provide it with its parameters. DONE
     // 6. Send the information to the scheduler at the appropriate time.
     // 7. Clear clock resources 
     }
+
+    free(processes);
+    msgctl(queue_id, IPC_RMID, NULL);
+    destroyClk(true);
+    return 0;
 }
 
 void clearResources(int signum)
 {
     //TODO Clears all resources in case of interruption DONE
     msgctl(queue_id, IPC_RMID, NULL);
+    killpg(getpgrp(), SIGKILL);
     destroyClk(true);
     exit(0);
 }
