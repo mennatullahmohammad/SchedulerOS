@@ -434,7 +434,6 @@ void cleanup_and_exit() {
 int main(int argc, char* argv[]) {
     int generator_done = 0;
     initClk();
-    int all_processes_sent = 0;
 
     key_t queue_key = ftok("/tmp", 'M');
     if (queue_key == -1) {
@@ -637,15 +636,9 @@ int main(int argc, char* argv[]) {
             RR_scheduler(clock_time);
         }
         
-        struct ProcessMsg end_msg;
-        if (msgrcv(msgid, &end_msg, sizeof(end_msg.proc), 3, IPC_NOWAIT) != -1) {
-            all_processes_sent = 1;
-            printf("Received end of processes signal at time %d\n", clock_time);
-            fflush(stdout);
-        }
 
         /* Termination check */
-        if (process_count > 0 && all_processes_sent) {
+        if (process_count > 0 ) {
             int all_done = 1;
             for (int i = 0; i < process_count; i++) {
                 if (all_processes[i].state != FINISHED) {
