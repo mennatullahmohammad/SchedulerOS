@@ -173,7 +173,8 @@ void Pri_inh(struct PCB* b, struct PCB* dep) {
         dep->expri = dep->P.Priority;
         dep->P.Priority = b->P.Priority;
         dep->depp = true;
-        dep->blockedID = b->P.PID;
+        dep->blockedID[dep->count] = b->P.PID;
+        dep->count++;
     }
 }
 
@@ -483,7 +484,7 @@ int main(int argc, char* argv[]) {
     current_process->last_start_time = -1;
     current_process->blocked = 0;
     current_process->unblock_time = -1;
-    current_process->blockedID = -1;
+    //current_process->blockedID = -1;
 
     logFile = fopen("scheduler.log", "w");
     if (!logFile) {
@@ -606,8 +607,9 @@ int main(int argc, char* argv[]) {
             new_proc.last_start_time = -1;
             new_proc.blocked = 0;
             new_proc.unblock_time = -1;
-            new_proc.blockedID = -1;
+            //new_proc.blockedID = -1; it's an array
             new_proc.depp = false;
+            new_proc.count = 0; //for blocked array
             
             // IMPORTANT: Update arrival time to actual arrival time in the system
             new_proc.P.ArrivalTime = clock_time;
