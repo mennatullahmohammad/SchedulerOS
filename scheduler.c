@@ -219,6 +219,15 @@ void SRTN_scheduler(int current_time) {
 
 /* HPF Scheduler */
 struct PCB* temp_hpf;
+void depfound(struct PCB* curr, struct PCB** temp, int ct)
+{
+    *temp = getPCB(curr->P.DependencyID);
+    Pri_inh(curr, *temp);
+    printSchedulerLogFile(curr, "stopped");
+    switch_process(curr, *temp, ct, ALG_HPF);
+    curr->state = BLOCKED;
+    current_process = *temp;
+}
 
 void HPF_scheduler(int current_time) {
     struct PCB* Hpri = peek(ready_queue);
@@ -226,18 +235,13 @@ void HPF_scheduler(int current_time) {
     if (current_process->P.PID == -1 && Hpri != NULL) {
         dequeue(&ready_queue, current_process);
 
-        if (current_process->start_time == -1) {
+        if (current_process->start_time == -1) { //never started before
             start_new_process(current_process, current_time);
             current_process->waiting_time = current_time - current_process->P.ArrivalTime;
             printSchedulerLogFile(current_process, "started");
 
             if (current_process->P.DependencyID != -1) {
-                temp_hpf = getPCB(current_process->P.DependencyID);
-                Pri_inh(current_process, temp_hpf);
-                printSchedulerLogFile(current_process, "stopped");
-                switch_process(current_process, temp_hpf, current_time, ALG_HPF);
-                current_process->state = BLOCKED;
-                current_process = temp_hpf;
+                depfound(current_process,temp_hpf,current_time);
             }
         } else {
             kill(current_process->P.PID, SIGCONT);
@@ -248,16 +252,11 @@ void HPF_scheduler(int current_time) {
             printSchedulerLogFile(current_process, "resumed");
             
             if (current_process->P.DependencyID != -1) {
-                temp_hpf = getPCB(current_process->P.DependencyID);
-                Pri_inh(current_process, temp_hpf);
-                printSchedulerLogFile(current_process, "stopped");
-                switch_process(current_process, temp_hpf, current_time, ALG_HPF);
-                current_process->state = BLOCKED;
-                current_process = temp_hpf;
+                depfound(current_process,temp_hpf,current_time);
             }
         }
     }
-    else if (current_process->P.PID != -1 && Hpri != NULL) {
+    else if (current_process->P.PID != -1 && Hpri != NULL) { 
         if (current_process->P.Priority < Hpri->P.Priority) {
             struct PCB next_proc;
             dequeue(&ready_queue, &next_proc);
@@ -265,15 +264,11 @@ void HPF_scheduler(int current_time) {
             printSchedulerLogFile(current_process, "stopped");
             switch_process(current_process, &next_proc, current_time, ALG_HPF);
             
-            *current_process = next_proc;
+            //*current_process = next_proc;
+            current_process = &next_proc;
 
             if (current_process->P.DependencyID != -1) {
-                temp_hpf = getPCB(current_process->P.DependencyID);
-                Pri_inh(current_process, temp_hpf);
-                printSchedulerLogFile(current_process, "stopped");
-                switch_process(current_process, temp_hpf, current_time, ALG_HPF);
-                current_process->state = BLOCKED;
-                current_process = temp_hpf;
+                depfound(current_process,temp_hpf,current_time);
             }
         }
     }
@@ -483,6 +478,9 @@ int main(int argc, char* argv[]) {
     current_process->blocked = 0;
     current_process->unblock_time = -1;
     //current_process->blockedID = -1;
+    //initialize everything??
+    current_process->depp = false;
+    current_process->count = 0;
 
     logFile = fopen("scheduler.log", "w");
     if (!logFile) {
@@ -539,14 +537,19 @@ int main(int argc, char* argv[]) {
 
                 printSchedulerLogFile(m, "finished");
 
-                // HPF: Free blocked process with priority inheritance
-                if (strcmp(alg_msg.mtext, "HPF") == 0 && m->blockedID != -1) {
-                    struct PCB* depfree = getPCB(m->blockedID);
-                    if (depfree) {
+                // HPF: Free blocked processes with priority inheritance
+                if (strcmp(alg_msg.mtext, "HPF") == 0 && m->count != 0) {
+                    struct PCB* depfree;
+                    for (int i=0; i<= m->count ; i++)
+                    {
+                        depfree = getPCB(m->blockedID[i]);
+                        if (depfree) {
                         depfree->state = READY;
                         enqueue(&ready_queue, depfree, ALG_HPF);
                         Pri_rev(m);
+                        }
                     }
+                    m->count=0;
                 }
             }
 
