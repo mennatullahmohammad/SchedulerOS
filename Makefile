@@ -1,15 +1,14 @@
 build:
 	gcc process_generator.c -o process_generator.out
 	gcc clk.c -o clk.out
-	gcc scheduler.c -o scheduler.out -lm
+	gcc scheduler.c MMU.c -lm -o scheduler.out
 	gcc process.c -o process.out
 	gcc test_generator.c -o test_generator.out
 
 clean:
-	rm -f *.out  processes.txt
+	rm -f *.out processes.txt
 
 all: clean build
 
 run:
-	./clk.out &
 	./process_generator.out
