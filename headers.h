@@ -219,7 +219,7 @@ void enqueueRR(struct Node** head, struct Node** tail, struct PCB p) {
 struct PCB dequeueRR(struct Node** head, struct Node** tail) {
     struct PCB p = (*head)->Entry;
     struct Node* temp = *head;
-    *head = (*head)->next;
+    
     if (*head == NULL) {
         *tail = NULL; // queue empty
         free(temp);
