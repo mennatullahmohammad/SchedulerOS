@@ -437,16 +437,13 @@ void cleanup_and_exit() {
 int main(int argc, char* argv[]) {
     initClk();
 
-    FILE* kf = fopen("keyfile", "a");
-    if (kf) fclose(kf);
-
-    key_t key_id = ftok("keyfile", 65);
-    if (key_id == -1) {
+    key_t queue_key = ftok("/tmp", 'M');
+    if (queue_key == -1) {
         perror("ftok");
         destroyClk(true);
         return 1;
     }
-    msgid = msgget(key_id, 0666 | IPC_CREAT);
+    msgid = msgget(queue_key, 0666 | IPC_CREAT);
     if (msgid == -1) {
         perror("msgget");
         destroyClk(true);
@@ -612,7 +609,7 @@ int main(int argc, char* argv[]) {
             new_proc.count = 0; //for blocked array
             
             // IMPORTANT: Update arrival time to actual arrival time in the system
-            new_proc.P.ArrivalTime = clock_time;
+            //new_proc.P.ArrivalTime = clock_time;
 
             if (process_count < MAX_PROCESSES)
                 all_processes[process_count++] = new_proc;

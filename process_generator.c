@@ -115,7 +115,7 @@ int main(int argc, char * argv[])
                 ; // busy wait
             }
 
-            proc.mtype = 1;
+            proc.mtype = 2;
             proc.proc = processes[next_process_index];
             if (msgsnd(queue_id, &proc, sizeof(proc.proc), 0) == -1) 
             {
@@ -127,7 +127,7 @@ int main(int argc, char * argv[])
 
         }      
         
-        proc.mtype = 2; // Message type for end of processes
+        proc.mtype = 3; // Message type for end of processes
         msgsnd(queue_id, &proc, 0, 0);
         // Wait for scheduler to finish
         waitpid(sched, NULL, 0);
