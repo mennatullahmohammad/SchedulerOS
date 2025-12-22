@@ -1,6 +1,41 @@
 #At time x process y state arr w total z remain y wait k
-At time 10 process 44826 started arr 10 total 3 remain 3 wait 0
-At time 14 process 44826 finished arr 10 total 3 remain 0 wait 1 TA 4 WTA 1.33
-At time 20 process 44892 started arr 20 total 5 remain 5 wait 0
-At time 21 process 44892 stopped arr 20 total 5 remain 4 wait 0
-At time 21 process 44893 started arr 21 total 30 remain 30 wait 0
+At time 10 process 4535 started arr 10 total 3 remain 3 wait 0
+At time 12 process 4535 stopped arr 10 total 3 remain 1 wait 0
+At time 12 process 4535 resumed arr 10 total 3 remain 1 wait 0
+At time 13 process 4535 finished arr 10 total 3 remain 0 wait 0 TA 3 WTA 1.00
+At time 20 process 4571 started arr 20 total 5 remain 5 wait 0
+At time 22 process 4571 stopped arr 20 total 5 remain 3 wait 0
+At time 22 process 4589 started arr 21 total 30 remain 30 wait 1
+At time 24 process 4589 stopped arr 21 total 30 remain 28 wait 1
+At time 24 process 4571 resumed arr 20 total 5 remain 3 wait 2
+At time 26 process 4571 finished arr 20 total 5 remain 0 wait 1 TA 6 WTA 1.20
+At time 26 process 4589 resumed arr 21 total 30 remain 28 wait 3
+At time 28 process 4589 stopped arr 21 total 30 remain 26 wait 3
+At time 28 process 4632 started arr 28 total 7 remain 7 wait 0
+At time 30 process 4632 stopped arr 28 total 7 remain 5 wait 0
+At time 30 process 4589 resumed arr 21 total 30 remain 26 wait 5
+At time 32 process 4589 stopped arr 21 total 30 remain 24 wait 5
+At time 32 process 4632 resumed arr 28 total 7 remain 5 wait 2
+At time 34 process 4632 stopped arr 28 total 7 remain 3 wait 2
+At time 34 process 4589 resumed arr 21 total 30 remain 24 wait 7
+At time 36 process 4589 stopped arr 21 total 30 remain 22 wait 7
+At time 36 process 4632 resumed arr 28 total 7 remain 3 wait 4
+At time 37 process 4632 finished arr 28 total 7 remain 0 wait 2 TA 9 WTA 1.29
+At time 37 process 4589 resumed arr 21 total 30 remain 22 wait 8
+At time 39 process 4589 stopped arr 21 total 30 remain 20 wait 8
+At time 39 process 4589 resumed arr 21 total 30 remain 20 wait 8
+At time 41 process 4589 stopped arr 21 total 30 remain 18 wait 8
+At time 41 process 4589 resumed arr 21 total 30 remain 18 wait 8
+At time 43 process 4589 stopped arr 21 total 30 remain 16 wait 8
+At time 43 process 4589 resumed arr 21 total 30 remain 16 wait 8
+At time 45 process 4589 stopped arr 21 total 30 remain 14 wait 8
+At time 45 process 4589 resumed arr 21 total 30 remain 14 wait 8
+At time 47 process 4589 stopped arr 21 total 30 remain 12 wait 8
+At time 47 process 4589 resumed arr 21 total 30 remain 12 wait 8
+At time 49 process 4589 stopped arr 21 total 30 remain 10 wait 8
+At time 49 process 4589 resumed arr 21 total 30 remain 10 wait 8
+At time 51 process 4589 stopped arr 21 total 30 remain 8 wait 8
+At time 51 process 4589 resumed arr 21 total 30 remain 8 wait 8
+At time 53 process 4589 stopped arr 21 total 30 remain 6 wait 8
+At time 53 process 4589 resumed arr 21 total 30 remain 6 wait 8
+At time 55 process 4589 finished arr 21 total 30 remain 0 wait 4 TA 34 WTA 1.13

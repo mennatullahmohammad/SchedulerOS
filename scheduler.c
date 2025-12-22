@@ -167,20 +167,6 @@ void switch_process(struct PCB* old_proc, struct PCB* new_proc, int current_time
     }
 }
 
-/* Priority Inheritance (for HPF) */
-void Pri_inh(struct PCB* b, struct PCB* dep) {
-    if (b->P.Priority > dep->P.Priority) {
-        dep->expri = dep->P.Priority;
-        dep->P.Priority = b->P.Priority;
-        dep->depp = true;
-        dep->blockedID[dep->count] = b->P.PID;
-        dep->count++;
-    }
-}
-
-void Pri_rev(struct PCB* dep) {
-    dep->P.Priority = dep->expri;
-}
 
 //SRTN Scheduler 
 void SRTN_scheduler(int current_time) {
@@ -218,15 +204,33 @@ void SRTN_scheduler(int current_time) {
 }
 
 /* HPF Scheduler */
-struct PCB* temp_hpf;
-void depfound(struct PCB* curr, struct PCB** temp, int ct)
+/* Priority Inheritance (for HPF) */
+void Pri_inh(struct PCB* b, struct PCB* dep) {
+    if (b->P.Priority > dep->P.Priority) {
+        b->expri = dep->P.Priority; //save in blocked
+        dep->P.Priority = b->P.Priority;
+        dep->depp = true;
+        dep->blockedID[dep->count] = b->P.PID; //starting from 0
+        dep->count++;
+    }
+}
+
+void Pri_rev(struct PCB* dep) {
+    //get first blocked id
+    struct PCB* b = getPCB(dep->blockedID[0]);
+    //put it's expri back
+    dep->P.Priority = b->expri;
+}
+
+void depfound(struct PCB* curr, int ct)
 {
-    *temp = getPCB(curr->P.DependencyID);
-    Pri_inh(curr, *temp);
+    struct PCB* temp = getPCB(curr->P.DependencyID);
+    if (temp->state == FINISHED) {return;} //no need for inh
+    Pri_inh(curr, temp);
     printSchedulerLogFile(curr, "stopped");
-    switch_process(curr, *temp, ct, ALG_HPF);
+    switch_process(curr, temp, ct, ALG_HPF);
     curr->state = BLOCKED;
-    current_process = *temp;
+    *current_process = *temp;
 }
 
 void HPF_scheduler(int current_time) {
@@ -240,8 +244,8 @@ void HPF_scheduler(int current_time) {
             current_process->waiting_time = current_time - current_process->P.ArrivalTime;
             printSchedulerLogFile(current_process, "started");
 
-            if (current_process->P.DependencyID != -1) {
-                depfound(current_process,temp_hpf,current_time);
+            if (current_process->P.DependencyID != -1) { 
+                depfound(current_process,current_time);
             }
         } else {
             kill(current_process->P.PID, SIGCONT);
@@ -252,7 +256,7 @@ void HPF_scheduler(int current_time) {
             printSchedulerLogFile(current_process, "resumed");
             
             if (current_process->P.DependencyID != -1) {
-                depfound(current_process,temp_hpf,current_time);
+                depfound(current_process,current_time);
             }
         }
     }
@@ -264,11 +268,11 @@ void HPF_scheduler(int current_time) {
             printSchedulerLogFile(current_process, "stopped");
             switch_process(current_process, &next_proc, current_time, ALG_HPF);
             
-            //*current_process = next_proc;
-            current_process = &next_proc;
+            *current_process = next_proc;
+            //&current_process = next_proc;
 
             if (current_process->P.DependencyID != -1) {
-                depfound(current_process,temp_hpf,current_time);
+                depfound(current_process,current_time);
             }
         }
     }
@@ -298,7 +302,8 @@ void RR_scheduler(int current_time) {
                         current_process->last_start_time = current_time;
                         printSchedulerLogFile(current_process, "resumed");
                     }
-                } else {
+                } 
+                else {
                     start_new_process(current_process, current_time);
                     current_process->waiting_time = current_time - current_process->P.ArrivalTime;
                     printSchedulerLogFile(current_process, "started");
@@ -325,6 +330,7 @@ void RR_scheduler(int current_time) {
 
             struct PCB copyPCB = *current_process;
             copyPCB.state = READY;
+            copyPCB.last_start_time = getClk();
             enqueueRR(&RR_head, &RR_tail, copyPCB);
 
             current_process->P.PID = -1;
@@ -522,11 +528,15 @@ int main(int argc, char* argv[]) {
                 i--;
             }
         }
-
-        /* Reap finished children */
-        int status;
-        pid_t finished_pid;
-        while ((finished_pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        //notification from process that it finished, dont blocl
+        struct FinishMsg finish_msg;
+        while (msgrcv(msgid, &finish_msg, sizeof(finish_msg), 4, IPC_NOWAIT) != -1) {
+            pid_t finished_pid = finish_msg.pid;
+            
+            // Reap the finished process
+            int status;
+            waitpid(finished_pid, &status, 0);
+            
             update_master_list_finish(finished_pid, clock_time);
 
             struct PCB* m = find_master_by_pid(finished_pid);
@@ -540,16 +550,16 @@ int main(int argc, char* argv[]) {
                 // HPF: Free blocked processes with priority inheritance
                 if (strcmp(alg_msg.mtext, "HPF") == 0 && m->count != 0) {
                     struct PCB* depfree;
-                    for (int i=0; i<= m->count ; i++)
-                    {
+                    for (int i = 0; i <= m->count; i++) {
                         depfree = getPCB(m->blockedID[i]);
                         if (depfree) {
-                        depfree->state = READY;
-                        enqueue(&ready_queue, depfree, ALG_HPF);
-                        Pri_rev(m);
+                            depfree->state = READY;
+                            enqueue(&ready_queue, depfree, ALG_HPF);
                         }
                     }
-                    m->count=0;
+                    Pri_rev(m);
+                    m->depp = false;
+                    m->count = 0;
                 }
             }
 
@@ -565,7 +575,7 @@ int main(int argc, char* argv[]) {
                 current_process->RemainingTime--;
             }
         }
-
+        
         /* Memory access while RUNNING (Phase 2) */
         if (current_process->state == RUNNING && current_process->P.PID != -1) {
             int mmu_result = MMU_access(current_process);
@@ -633,9 +643,10 @@ int main(int argc, char* argv[]) {
         } else if (strncmp(alg_msg.mtext, "RR", 2) == 0) {
             RR_scheduler(clock_time);
         }
+        
 
         /* Termination check */
-        if (process_count > 0) {
+        if (process_count > 0 ) {
             int all_done = 1;
             for (int i = 0; i < process_count; i++) {
                 if (all_processes[i].state != FINISHED) {
@@ -671,6 +682,7 @@ int main(int argc, char* argv[]) {
 
     if (msgid != -1) msgctl(msgid, IPC_RMID, NULL);
     if (logFile) fclose(logFile);
+    free(current_process);
     destroyClk(true);
     
     printf("Scheduler terminated successfully\n");

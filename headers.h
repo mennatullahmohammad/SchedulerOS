@@ -140,6 +140,12 @@ struct DoneMsg {
     char dummy[1]; // Just a placeholder
 };
 
+struct FinishMsg {
+    long mtype;           // message type = 4
+    pid_t pid;            // process PID
+    int finish_time;      // time when finished
+};
+
 typedef enum { ALG_SRTN, ALG_HPF } Algorithm;
 
 bool enqueue(struct Node** head, struct PCB *p, Algorithm alg)
@@ -217,15 +223,22 @@ void enqueueRR(struct Node** head, struct Node** tail, struct PCB p) {
 
 
 struct PCB dequeueRR(struct Node** head, struct Node** tail) {
+    if (*head == NULL) {
+        struct PCB empty={0}; // queue empty
+        return empty;
+    }
+
     struct PCB p = (*head)->Entry;
     struct Node* temp = *head;
-    *head = (*head)->next;
-    if (*head == NULL) {
-        *tail = NULL; // queue empty
+    
+    // Only one node left
+    if (*head == *tail) {
+        *head = NULL;
+        *tail = NULL;
         free(temp);
         return p;
     }
-
+    
     // multiple elements
     *head = (*head)->next;     // move head
     (*tail)->next = *head;     // maintain circular
