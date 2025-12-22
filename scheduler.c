@@ -300,7 +300,6 @@ void depfound(struct PCB* curr, int ct)
         if (all_processes[i].orig_ID == curr->orig_ID) { //blocked proc
             all_processes[i].state = BLOCKED;
             all_processes[i].last_start_time = ct;
-            break;
         }
         if (all_processes[i].orig_ID == temp->orig_ID) { //dep proc
             all_processes[i].P.Priority = temp->P.Priority;
@@ -309,7 +308,6 @@ void depfound(struct PCB* curr, int ct)
             for (int j = 0; j < temp->count; j++) {
                 all_processes[i].blockedID[j] = temp->blockedID[j];
             }
-            break;
         }
     }
 
