@@ -52,7 +52,7 @@ void Pri_rev(struct PCB* dep);
 void generate_perf_file();
 void cleanup_and_exit();
 int second_chance_page();
-int handle_page_fault(struct PCB* p, int vpn, int is_write, int SWAP_MODE);
+int handle_page_fault(struct PCB* p, int vpn, int is_write, int mode,int SWAP_MODE);
 int MMU_access(struct PCB* p);
 
 /* Memory Management (Phase 2) */
@@ -100,7 +100,7 @@ int MMU_access(struct PCB* p) {
 
     /* Page fault? */
     if (p->page_table[vpn].valid == 0) {
-        return handle_page_fault(p, vpn, modified,SWAP_MODE);
+        return handle_page_fault(p, vpn, modified,0,SWAP_MODE);
     }
     
     int frame = p->page_table[vpn].frame;
@@ -544,15 +544,39 @@ int second_chance_page(){
     return page;
 }
 
-
-int handle_page_fault(struct PCB* p, int vpn, int modify, int MODE)
+// Mode parameter:
+// any number except 1 = Regular page fault
+// 1 = Initial page table allocation
+int handle_page_fault(struct PCB* p, int vpn, int modify, int mode, int S_MODE)
 {
-    fprintf(mem_log, "PageFault upon VA %d from process %d", vpn, p->P.PID);
-    int frame = find_free_frame();
+    int frame;
+
+    /* ---------- MODE 1: INITIAL PAGE TABLE ALLOCATION ---------- */
+    if (mode == 1)
+    {
+        frame = find_free_frame();
+        if (frame == -1)
+            frame = second_chance_page();
+
+            frame_table[frame].free = 0;
+            frame_table[frame].pid = p->P.PID;
+            frame_table[frame].vpn = -1;     // page table, not a data page
+            frame_table[frame].ref = 1;
+            frame_table[frame].modified = 0;
+            p->page_table_frame = frame;
+
+        fprintf(mem_log, "At time %d page table of process %d allocated at frame %d\n", getClk(), p->P.PID, frame);
+
+        fflush(mem_log);
+        return 0;   // do NOT block scheduler
+    }
+
+    fprintf(mem_log, "PageFault upon VA %d from process %d\n", vpn, p->P.PID);
+    frame = find_free_frame();
 
     if (frame == -1)
     {
-        if (MODE == 0) {
+        if (S_MODE == 0) {
             
             frame = second_chance_page();
         } else {
@@ -561,10 +585,18 @@ int handle_page_fault(struct PCB* p, int vpn, int modify, int MODE)
     
 
         struct Frame* selected_page = &frame_table[frame];
+
+        while (selected_page->vpn == -1)
+        {
+            selected_page->ref = 0;
+            frame = second_chance_page();
+            selected_page = &frame_table[frame];
+        }
+
         struct PCB* selected_page_proc = getPCB(selected_page->pid);
 
         if (selected_page->modified) {
-            fprintf(mem_log, "Swapping out page %d to disk\n", frame);
+            fprintf(mem_log, "Swapping out page %d to disk\n", selected_page->vpn);
         }
 
         selected_page_proc->page_table[selected_page->vpn].valid = 0;
@@ -579,7 +611,7 @@ int handle_page_fault(struct PCB* p, int vpn, int modify, int MODE)
     frame_table[frame].ref = 1;
     frame_table[frame].vpn = vpn;
     
-    if (MODE == 1) {
+    if (S_MODE == 1) {
         
         frame_table[frame].last_access = getClk();
     }
@@ -627,6 +659,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     fprintf(mem_log, "#At time x page y for process z is loaded into memory page w.\n");
+    fprintf(mem_log, "#PageFault upon VA 'xx' from process 'yy' \n");
+    fprintf(mem_log, "#Free physical page 'zz' allocated\n");
+    fprintf(mem_log, "#Swapping out page 'zz' to disk\n");
     fflush(mem_log);
 
     key_t queue_key = ftok("/tmp", 'M');
@@ -817,6 +852,20 @@ int main(int argc, char* argv[]) {
             struct PCB new_proc;
             new_proc.P= proc_msg.proc;
             new_proc.orig_ID = proc_msg.proc.PID; //save original ID
+
+            new_proc.num_pages = (new_proc.P.disk_limit + PAGE_SIZE - 1) / PAGE_SIZE;
+
+            new_proc.page_table = malloc(new_proc.num_pages * sizeof(struct PageTableEntry));
+
+            for (int i = 0; i < new_proc.num_pages; i++) {
+            new_proc.page_table[i].valid = 0;
+            new_proc.page_table[i].frame = -1;
+            new_proc.page_table[i].ref = 0;
+            new_proc.page_table[i].modified = 0;
+            }
+
+            handle_page_fault(&new_proc, -1, 0, 1,SWAP_MODE); //initialize new page table vpn = -1
+            handle_page_fault(&new_proc, 0, 0, 0,SWAP_MODE);  //load first page vpn = 0
 
             printf("Received process: PID=%d, Arrival=%d, Runtime=%d at time %d\n",
                    new_proc.P.PID, new_proc.P.ArrivalTime, new_proc.P.Runtime, clock_time);

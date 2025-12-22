@@ -90,6 +90,7 @@ struct PCB {
     int blocked;
     int unblock_time;
     struct PageTableEntry *page_table;
+    int num_pages;                // number of virtual pages
     int page_table_frame;    // physical frame of page table
     FILE* req_file;          // requests.txt file pointer
 };
