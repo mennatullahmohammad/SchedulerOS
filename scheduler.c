@@ -566,7 +566,7 @@ int handle_page_fault(struct PCB* p, int vpn, int modify, int mode)
         return 0;   // do NOT block scheduler
     }
 
-    fprintf(mem_log, "PageFault upon VA %d from process %d", vpn, p->P.PID);
+    fprintf(mem_log, "PageFault upon VA %d from process %d\n", vpn, p->P.PID);
     frame = find_free_frame();
 
     if (frame == -1)
@@ -627,6 +627,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     fprintf(mem_log, "#At time x page y for process z is loaded into memory page w.\n");
+    fprintf(mem_log, "#PageFault upon VA 'xx' from process 'yy' \n");
+    fprintf(mem_log, "#Free physical page 'zz' allocated\n");
+    fprintf(mem_log, "#Swapping out page 'zz' to disk\n");
     fflush(mem_log);
 
     key_t queue_key = ftok("/tmp", 'M');
