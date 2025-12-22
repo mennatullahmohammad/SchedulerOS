@@ -73,10 +73,10 @@ typedef enum {READY, RUNNING, FINISHED, BLOCKED} proc_state;
 
 //pcb struct
 struct PCB {
-    int virtual_pid;   // original ID from processes.txt
     struct Process P;
     int RemainingTime;
     int expri; //for pri inheritance
+    int orig_ID; //for searching later
     int start_time;    
     int finish_time;   
     int last_start_time;
