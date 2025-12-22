@@ -58,13 +58,41 @@ int blocked_count = 0;
 
 int MMU_access(struct PCB* p) {
 
+    if (!p->req_file) return 0; 
+
+    //time since process strated
+    int time_pstart = getClk() - p->start_time;
+
+    // save current file line 
+    long file_line = ftell(p->req_file); //current pos of the file
+
+    char line[64];
+    int req_time;
     int addrbin;
     int rw;
+
+    //read the next line
+    if (fgets(line, sizeof(line), p->req_file) == NULL) {
+        return 0; 
+    }
+
+    //skip comments
+    if (line[0] == '#') return 0;
+
+    //Time, Binary Address, R/W Type
+    sscanf(line, "%d %s %c", &req_time, addrbin, &rw);
+
+    //check time
+    if (req_time != time_pstart) {
+        //time didnt come yet
+        fseek(p->req_file, file_line, SEEK_SET);   //rewind line
+        return 0; 
+    }
+
 
     int virtual_address = strtol(addrbin, NULL, 2);
     int vpn = virtual_address / PAGE_SIZE;
     int modified = (rw == 'w');
-
 
 
     /* Page fault? */
@@ -79,75 +107,6 @@ int MMU_access(struct PCB* p) {
     if (modified) {
         frame_table[frame].modified = 1;
         p->page_table[vpn].modified = 1;
-    }
-
-
-    return 0;   // always OK for now 
-    if (!p->req_file) return 0; 
-
-    //time since process strated
-    int time_pstart = getClk() - p->start_time;
-
-    // save current file line 
-    long file_line = ftell(p->req_file); //?
-
-    char line[64];
-    int req_time;
-    char addr_bin[32];
-    char rw;
-
-    //read the next line
-    if (fgets(line, sizeof(line), p->req_file) == NULL) {
-        return 0; 
-    }
-
-    //skip comments
-    if (line[0] == '#') return 0;
-
-    //Time, Binary Address, R/W Type
-    sscanf(line, "%d %s %c", &req_time, addr_bin, &rw);
-
-    //check time
-    if (req_time != time_pstart) {
-        //time didnt come yet
-        fseek(p->req_file, file_line, SEEK_SET);
-        return 0; 
-    }
-
-    // binary to int
-    int virtual_address = (int)strtol(addr_bin, NULL, 2);
-
-    // Validate Address against Process Limit (Phase 2 Requirement)
-    // "limit" is the size of the process in bytes.
-    // if (virtual_address >= p->limit) {
-    //     printf("SegFault: Process %d tried accessing invalid address %d\n", p->P.PID, virtual_address);
-    //     return 0; // Ignore invalid access
-    // }
-
-    // 8. Calculate VPN (Virtual Page Number)
-    int vpn = virtual_address / PAGE_SIZE; // Integer division (e.g., 35 / 16 = 2)
-
-    // --- PAGE TABLE LOOKUP ---
-    int is_write = (rw == 'w');
-
-    // Check if Page is Valid (In RAM)
-    if (p->page_table[vpn].valid == 0) {
-        // MISS -> Call Page Fault Handler -> Return 1 to Block Process
-        return handle_page_fault(p, vpn, is_write); 
-    } 
-    else {
-        // HIT -> Update Reference/Dirty Bits -> Return 0 to Continue
-        int frame = p->page_table[vpn].frame;
-        
-        // Update Frame Table (Physical RAM)
-        frame_table[frame].ref = 1;          // "Referenced" bit for Second Chance
-        if (is_write) frame_table[frame].modified = 1; 
-
-        // Update Page Table (Process View)
-        p->page_table[vpn].ref = 1;
-        if (is_write) p->page_table[vpn].modified = 1;
-
-        return 0; // Success, continue running
     }
 }
 
