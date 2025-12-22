@@ -76,6 +76,7 @@ struct PCB {
     struct Process P;
     int RemainingTime;
     int expri; //for pri inheritance
+    int orig_ID; //for searching later
     int start_time;    
     int finish_time;   
     int last_start_time;
