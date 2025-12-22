@@ -48,12 +48,12 @@ void Pri_inh(struct PCB* b, struct PCB* dep);
 void Pri_rev(struct PCB* dep);
 void generate_perf_file();
 void cleanup_and_exit();
+int second_chance_page();
 int handle_page_fault(struct PCB* p, int vpn, int is_write);
 
 /* Memory Management (Phase 2) */
 struct PCB blocked_list[MAX_PROCESSES];
 int blocked_count = 0;
-init_memory(); 
 
 int MMU_access(struct PCB* p) {
     return 0;   // always OK for now 
@@ -441,14 +441,42 @@ void cleanup_and_exit() {
     exit(0);
 }
 
+int second_chance_page(){
+    while(frame_table[sc_index].ref == 1)
+    {
+        frame_table[sc_index].ref = 0;
+        sc_index++;
+
+        if (sc_index == FRAME_COUNT)
+            {sc_index =0;}
+    }
+        
+    int page = sc_index;
+    sc_index++;
+
+    if (sc_index == FRAME_COUNT)
+        {sc_index =0;}
+
+    return page;
+}
+
 
 int handle_page_fault(struct PCB* p, int vpn, int is_write)
 {
-    fprintf(mem_log, "#PageFault upon VA %d from process %d", vpn, p->P.PID);
+    fprintf(mem_log, "PageFault upon VA %d from process %d", vpn, p->P.PID);
     int frame = find_free_frame();
+
+    if (frame == -1)
+    {
+        frame = second_chance_page();
+    }
+
+    struct Frame* selected_page = &frame_table[frame];
+    struct PCB* selected_page_proc = selected_page->pid;
 }
 
 int main(int argc, char* argv[]) {
+    init_memory(); 
     int generator_done = 0;
     initClk();
 
