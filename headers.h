@@ -84,6 +84,8 @@ struct Process {
     int Runtime;   
     int Priority;
     int DependencyID;
+    int disk_base;           
+    int disk_limit;         
 };
 
 
@@ -107,6 +109,9 @@ struct PCB {
     int count;
     int blocked;
     int unblock_time;
+    struct PageTableEntry *page_table;
+    int page_table_frame;    // physical frame of page table
+    FILE* req_file;          // requests.txt file pointer
 };
 
 //Linked List DS definition
@@ -136,7 +141,7 @@ struct ProcessMsg {
 };
 
 struct DoneMsg {
-    long mtype;  // MUST be long
+    long mtype;  // 
     char dummy[1]; // Just a placeholder
 };
 

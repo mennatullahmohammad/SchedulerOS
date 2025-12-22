@@ -1,7 +1,8 @@
 #include "MMU.h"
+#include "headers.h"
 
 
-Frame frame_table[FRAME_COUNT]; //phy memory ->RAM
+struct Frame frame_table[FRAME_COUNT]; //phy memory ->RAM
 
 
 void init_memory(void) {

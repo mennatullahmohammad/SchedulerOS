@@ -10,6 +10,7 @@
 #include <signal.h>
 #include <unistd.h>
 #include <errno.h>
+#include "MMU.h"
 
 #define MAX_PROCESSES 100
 #define MSG_KEY 65
@@ -24,6 +25,9 @@ int process_count = 0;
 
 FILE* logFile = NULL;
 int msgid = -1;
+
+FILE* mem_log = NULL;
+int sc_index = 0;   // Second Chance pointer
 
 int quantum = 2;
 int runningProcessStartTime = 0;
@@ -44,10 +48,12 @@ void Pri_inh(struct PCB* b, struct PCB* dep);
 void Pri_rev(struct PCB* dep);
 void generate_perf_file();
 void cleanup_and_exit();
+int handle_page_fault(struct PCB* p, int vpn, int is_write);
 
 /* Memory Management (Phase 2) */
 struct PCB blocked_list[MAX_PROCESSES];
 int blocked_count = 0;
+init_memory(); 
 
 int MMU_access(struct PCB* p) {
     return 0;   // always OK for now 
@@ -433,6 +439,13 @@ void cleanup_and_exit() {
     if (logFile) fclose(logFile);
     destroyClk(true);
     exit(0);
+}
+
+
+int handle_page_fault(struct PCB* p, int vpn, int is_write)
+{
+    fprintf(mem_log, "#PageFault upon VA %d from process %d", vpn, p->P.PID);
+    int frame = find_free_frame();
 }
 
 int main(int argc, char* argv[]) {
