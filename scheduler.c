@@ -50,12 +50,38 @@ void generate_perf_file();
 void cleanup_and_exit();
 int second_chance_page();
 int handle_page_fault(struct PCB* p, int vpn, int is_write);
+int MMU_access(struct PCB* p);
 
 /* Memory Management (Phase 2) */
 struct PCB blocked_list[MAX_PROCESSES];
 int blocked_count = 0;
 
 int MMU_access(struct PCB* p) {
+
+    int addrbin;
+    int rw;
+
+    int virtual_address = strtol(addrbin, NULL, 2);
+    int vpn = virtual_address / PAGE_SIZE;
+    int modified = (rw == 'w');
+
+
+
+    /* Page fault? */
+    if (p->page_table[vpn].valid == 0) {
+        return handle_page_fault(p, vpn, modified);
+    }
+
+    int frame = p->page_table[vpn].frame;
+    frame_table[frame].ref = 1;
+    p->page_table[vpn].ref = 1;
+
+    if (modified) {
+        frame_table[frame].modified = 1;
+        p->page_table[vpn].modified = 1;
+    }
+
+
     return 0;   // always OK for now 
 }
 
@@ -461,7 +487,7 @@ int second_chance_page(){
 }
 
 
-int handle_page_fault(struct PCB* p, int vpn, int is_write)
+int handle_page_fault(struct PCB* p, int vpn, int modify)
 {
     fprintf(mem_log, "PageFault upon VA %d from process %d", vpn, p->P.PID);
     int frame = find_free_frame();
@@ -469,11 +495,41 @@ int handle_page_fault(struct PCB* p, int vpn, int is_write)
     if (frame == -1)
     {
         frame = second_chance_page();
+    
+
+        struct Frame* selected_page = &frame_table[frame];
+        struct PCB* selected_page_proc = getPCB(selected_page->pid);
+
+        if (selected_page->modified) {
+            fprintf(mem_log, "Swapping out page %d to disk\n", frame);
+        }
+
+        selected_page_proc->page_table[selected_page->vpn].valid = 0;
+    }
+    else {
+        fprintf(mem_log, "Free Physical page %d allocated\n", frame);
     }
 
-    struct Frame* selected_page = &frame_table[frame];
-    struct PCB* selected_page_proc = selected_page->pid;
+    frame_table[frame].free = 0;
+    frame_table[frame].pid = p->P.PID;
+    frame_table[frame].modified = modify;
+    frame_table[frame].ref = 1;
+    frame_table[frame].vpn = vpn;
+
+    p->page_table[vpn].modified = modify;
+    p->page_table[vpn].frame = frame;
+    p->page_table[vpn].valid = 1;
+    p->page_table[vpn].ref = 1;
+
+    fprintf(mem_log, "At time %d page %d for process %d is loaded into memory page %d.\n", getClk(), vpn, p->P.PID, frame);
+
+    fflush(mem_log);
+
+    return 1;   // tell scheduler to BLOCK
+
 }
+
+
 
 int main(int argc, char* argv[]) {
     init_memory(); 
