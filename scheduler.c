@@ -723,6 +723,7 @@ int main(int argc, char* argv[]) {
         while (msgrcv(msgid, &proc_msg, sizeof(proc_msg.proc), 2, IPC_NOWAIT) != -1) {
             struct PCB new_proc;
             new_proc.P= proc_msg.proc;
+            new_proc.virtual_pid = new_proc.P.PID;
 
             printf("Received process: PID=%d, Arrival=%d, Runtime=%d at time %d\n",
                    new_proc.P.PID, new_proc.P.ArrivalTime, new_proc.P.Runtime, clock_time);
