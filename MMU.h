@@ -6,25 +6,25 @@
 #define FRAME_COUNT (MEMORY_SIZE / PAGE_SIZE)  // 32 frames
 
 
-typedef struct {
+typedef struct Frame {
     int free;        // 1 = frame is free, 0 = not free
     int pid;         // Process ID that owns this frame
     int vpn;         // Virtual Page Number stored in this frame
     int ref;         // Reference bit 
     int modified;    // 1 if page was written 
-} Frame;
+};
 
 
 
-typedef struct {
+typedef struct PageTableEntry {
     int valid;       // 1 = page is in memory
     int frame;       // Physical frame number
     int ref;         // Reference bit
     int modified;    // Modified bit
-} PageTableEntry;
+};
 
 
-extern Frame frame_table[FRAME_COUNT];
+extern struct Frame frame_table[FRAME_COUNT];
 
 
   // MMU Helper Functions
