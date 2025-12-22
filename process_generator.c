@@ -37,12 +37,14 @@ int main(int argc, char * argv[])
     while(fgets(buffer, sizeof(buffer), file_ptr)) 
     {
        if(buffer[0] != '#')
-        {sscanf(buffer, "%d %d %d %d %d",
+        {sscanf(buffer, "%d %d %d %d %d %d %d",
             &processes[index].PID,           
             &processes[index].ArrivalTime,   
             &processes[index].Runtime,       
             &processes[index].Priority,      
-            &processes[index].DependencyID); 
+            &processes[index].DependencyID,
+            &processes[index].disk_base,
+            &processes[index].disk_limit);
             index++;
         }
     }  
