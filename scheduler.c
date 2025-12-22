@@ -30,6 +30,7 @@ int msgid = -1;
 
 FILE* mem_log = NULL;
 int sc_index = 0;   // Second Chance pointer
+int SWAP_MODE = 0;
 
 int quantum = 2;
 int runningProcessStartTime = 0;
@@ -51,7 +52,7 @@ void Pri_rev(struct PCB* dep);
 void generate_perf_file();
 void cleanup_and_exit();
 int second_chance_page();
-int handle_page_fault(struct PCB* p, int vpn, int is_write);
+int handle_page_fault(struct PCB* p, int vpn, int is_write, int SWAP_MODE);
 int MMU_access(struct PCB* p);
 
 /* Memory Management (Phase 2) */
@@ -71,7 +72,7 @@ int MMU_access(struct PCB* p) {
     char line[64];
     int req_time;
     char addrbin[32];
-    int rw;
+    char rw;
 
     //read the next line
     if (fgets(line, sizeof(line), p->req_file) == NULL) {
@@ -99,10 +100,14 @@ int MMU_access(struct PCB* p) {
 
     /* Page fault? */
     if (p->page_table[vpn].valid == 0) {
-        return handle_page_fault(p, vpn, modified);
+        return handle_page_fault(p, vpn, modified,SWAP_MODE);
     }
-
+    
     int frame = p->page_table[vpn].frame;
+    if (SWAP_MODE == 1) {
+        // LRU: Update last_access timestamp
+        frame_table[frame].last_access = getClk();
+    }
     frame_table[frame].ref = 1;
     p->page_table[vpn].ref = 1;
 
@@ -540,14 +545,19 @@ int second_chance_page(){
 }
 
 
-int handle_page_fault(struct PCB* p, int vpn, int modify)
+int handle_page_fault(struct PCB* p, int vpn, int modify, int MODE)
 {
     fprintf(mem_log, "PageFault upon VA %d from process %d", vpn, p->P.PID);
     int frame = find_free_frame();
 
     if (frame == -1)
     {
-        frame = second_chance_page();
+        if (MODE == 0) {
+            
+            frame = second_chance_page();
+        } else {
+            frame = lru_frame();
+        }
     
 
         struct Frame* selected_page = &frame_table[frame];
@@ -568,6 +578,11 @@ int handle_page_fault(struct PCB* p, int vpn, int modify)
     frame_table[frame].modified = modify;
     frame_table[frame].ref = 1;
     frame_table[frame].vpn = vpn;
+    
+    if (MODE == 1) {
+        
+        frame_table[frame].last_access = getClk();
+    }
 
     p->page_table[vpn].modified = modify;
     p->page_table[vpn].frame = frame;
@@ -582,7 +597,24 @@ int handle_page_fault(struct PCB* p, int vpn, int modify)
 
 }
 
+//////LRU////////////
 
+//Find which frame in RAM has been accessed longest ago 
+int lru_frame() {
+    int lru_frame_num = -1;
+    int oldest_time = getClk() + 1;  // future time
+
+    for (int i = 0; i < FRAME_COUNT; i++) {
+        if (frame_table[i].free == 0) {  // Only check occupied frames
+            if (frame_table[i].last_access < oldest_time) {
+                oldest_time = frame_table[i].last_access;
+                lru_frame_num = i;  // LRU selected page
+            }
+        }
+    }
+    
+    return lru_frame_num;  // Return the chosen page
+}
 
 int main(int argc, char* argv[]) {
     init_memory(); 
@@ -651,6 +683,13 @@ int main(int argc, char* argv[]) {
         perror("fopen scheduler.log");
         cleanup_and_exit();
     }
+
+    if (SWAP_MODE == 0) {
+        fprintf(mem_log, "#Using Second Chance algorithm for page swapping\n");
+    } else {
+        fprintf(mem_log, "#Using LRU algorithm for page swapping\n");
+    }
+    
     fprintf(logFile, "#At time x process y state arr w total z remain y wait k\n");
     fflush(logFile);
     printf("Log file opened successfully\n");

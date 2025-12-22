@@ -12,6 +12,7 @@ void init_memory(void) {
         frame_table[i].vpn = -1;     // No virtual page
         frame_table[i].ref = 0;      
         frame_table[i].modified = 0; 
+        frame_table[i].last_access = 0;
     }
 }
 

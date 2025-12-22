@@ -12,9 +12,8 @@ typedef struct Frame {
     int vpn;         // Virtual Page Number stored in this frame
     int ref;         // Reference bit 
     int modified;    // 1 if page was written 
+    int last_access; // for LRU, last access
 };
-
-
 
 typedef struct PageTableEntry {
     int valid;       // 1 = page is in memory
