@@ -68,8 +68,8 @@ int MMU_access(struct PCB* p) {
 
     char line[64];
     int req_time;
-    int addrbin;
-    int rw;
+    char addrbin[32]; 
+    char rw;
 
     //read the next line
     if (fgets(line, sizeof(line), p->req_file) == NULL) {
@@ -108,6 +108,7 @@ int MMU_access(struct PCB* p) {
         frame_table[frame].modified = 1;
         p->page_table[vpn].modified = 1;
     }
+    return 0;  
 }
 
 // Get PCB by ID 
@@ -486,7 +487,14 @@ void generate_perf_file() {
 
 void cleanup_and_exit() {
     generate_perf_file();
+    for (int i = 0; i < process_count; i++) {
+        if (all_processes[i].req_file) {
+            fclose(all_processes[i].req_file);
+        }
+    }
+    
     if (msgid != -1) msgctl(msgid, IPC_RMID, NULL);
+    if (mem_log) fclose(mem_log);  
     if (logFile) fclose(logFile);
     destroyClk(true);
     exit(0);
@@ -560,6 +568,14 @@ int main(int argc, char* argv[]) {
     init_memory(); 
     int generator_done = 0;
     initClk();
+    mem_log = fopen("memory.log", "w");
+    if (!mem_log) {
+        perror("fopen memory.log");
+        destroyClk(true);
+        return 1;
+    }
+    fprintf(mem_log, "#At time x page y for process z is loaded into memory page w.\n");
+    fflush(mem_log);
 
     key_t queue_key = ftok("/tmp", 'M');
     if (queue_key == -1) {
@@ -744,6 +760,17 @@ int main(int argc, char* argv[]) {
             //new_proc.blockedID = -1; it's an array
             new_proc.depp = false;
             new_proc.count = 0; //for blocked array
+            
+            char req_filename[64];
+            snprintf(req_filename, sizeof(req_filename), "requests_%d.txt", new_proc.P.PID);
+            new_proc.req_file = fopen(req_filename, "r");
+            if (!new_proc.req_file) {
+                printf("Warning: Could not open %s\n", req_filename);
+                
+            }
+
+            //handle_page_fault(&new_proc,);
+            //load_first_page(&new_proc);
 
             if (process_count < MAX_PROCESSES)
                 all_processes[process_count++] = new_proc;
