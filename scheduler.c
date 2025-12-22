@@ -51,7 +51,7 @@ void Pri_rev(struct PCB* dep);
 void generate_perf_file();
 void cleanup_and_exit();
 int second_chance_page();
-int handle_page_fault(struct PCB* p, int vpn, int is_write);
+int handle_page_fault(struct PCB* p, int vpn, int modify, int mode);
 int MMU_access(struct PCB* p);
 
 /* Memory Management (Phase 2) */
@@ -71,7 +71,7 @@ int MMU_access(struct PCB* p) {
     char line[64];
     int req_time;
     char addrbin[32];
-    int rw;
+    char rw;
 
     //read the next line
     if (fgets(line, sizeof(line), p->req_file) == NULL) {
@@ -99,7 +99,7 @@ int MMU_access(struct PCB* p) {
 
     /* Page fault? */
     if (p->page_table[vpn].valid == 0) {
-        return handle_page_fault(p, vpn, modified);
+        return handle_page_fault(p, vpn, modified, 0);
     }
 
     int frame = p->page_table[vpn].frame;
@@ -376,30 +376,38 @@ void HPF_scheduler(int current_time) {
 
 // Round Robin Scheduler 
 void RR_scheduler(int current_time) {
+    // Check if current process finished execution completely
+    if (current_process->P.PID != -1 && 
+        current_process->state == RUNNING && 
+        current_process->RemainingTime <= 0) {
+        // Process finished ,will be reaped by waitpid in main loop
+        current_process->P.PID = -1;
+        current_process->state = FINISHED;
+        runningProcessStartTime = 0;
+        runningProcessEndTime = 0;
+        return;
+    }
+    
+    // CPU is idle - schedule next process from queue
     if (current_process->P.PID == -1) {
         if (RR_head != NULL) {
             struct PCB p = dequeueRR(&RR_head, &RR_tail);
             *current_process = p;
 
             if (current_process->start_time == -1) {
+                // First time starting
                 start_new_process(current_process, current_time);
                 current_process->waiting_time = current_time - current_process->P.ArrivalTime;
                 printSchedulerLogFile(current_process, "started");
             } else {
-                if (current_process->P.PID != -1) {
-                    if (kill(current_process->P.PID, SIGCONT) == -1) {
-                        start_new_process(current_process, current_time);
-                        current_process->waiting_time = current_time - current_process->P.ArrivalTime;
-                        printSchedulerLogFile(current_process, "started");
-                    } else {
-                        current_process->state = RUNNING;
-                        int time_in_queue = current_time - current_process->last_start_time;
-                        current_process->waiting_time += time_in_queue;
-                        current_process->last_start_time = current_time;
-                        printSchedulerLogFile(current_process, "resumed");
-                    }
-                } 
-                else {
+                // Resuming from queue
+                if (current_process->P.PID != -1 && kill(current_process->P.PID, SIGCONT) != -1) {
+                    current_process->state = RUNNING;
+                    // Waiting time already accumulated in main loop
+                    current_process->last_start_time = current_time;
+                    printSchedulerLogFile(current_process, "resumed");
+                } else {
+                    // Process was killed somehow, restart
                     start_new_process(current_process, current_time);
                     current_process->waiting_time = current_time - current_process->P.ArrivalTime;
                     printSchedulerLogFile(current_process, "started");
@@ -414,61 +422,35 @@ void RR_scheduler(int current_time) {
         return;
     }
 
-    if (current_process->P.PID != -1 && current_process->state == RUNNING && getClk() >= runningProcessEndTime) {
+    // Check if quantum expired for running process
+    if (current_process->P.PID != -1 && 
+        current_process->state == RUNNING && 
+        current_time >= runningProcessEndTime) {
+        
         pid_t pid = current_process->P.PID;
 
-        if (pid != -1) {
+        // Check if process has more work to do
+        if (current_process->RemainingTime > 0) {
+            // Quantum expired, but process not finished - preempt
             printSchedulerLogFile(current_process, "stopped");
 
             if (kill(pid, SIGSTOP) == -1) {
-                /* ignore error */
+                perror("kill SIGSTOP");
             }
 
             struct PCB copyPCB = *current_process;
             copyPCB.state = READY;
-            copyPCB.last_start_time = getClk();
+            copyPCB.last_start_time = current_time;
             enqueueRR(&RR_head, &RR_tail, copyPCB);
 
             current_process->P.PID = -1;
             current_process->state = READY;
+            runningProcessStartTime = 0;
+            runningProcessEndTime = 0;
         }
-
-        if (RR_head != NULL) {
-            struct PCB p = dequeueRR(&RR_head, &RR_tail);
-            *current_process = p;
-
-            if (current_process->start_time == -1) {
-                start_new_process(current_process, getClk());
-                current_process->waiting_time = getClk() - current_process->P.ArrivalTime;
-                printSchedulerLogFile(current_process, "started");
-            } else {
-                if (current_process->P.PID != -1) {
-                    if (kill(current_process->P.PID, SIGCONT) == -1) {
-                        start_new_process(current_process, getClk());
-                        current_process->waiting_time = getClk() - current_process->P.ArrivalTime;
-                        printSchedulerLogFile(current_process, "started");
-                    } else {
-                        current_process->state = RUNNING;
-                        int time_in_queue = getClk() - current_process->last_start_time;
-                        current_process->waiting_time += time_in_queue;
-                        current_process->last_start_time = getClk();
-                        printSchedulerLogFile(current_process, "resumed");
-                    }
-                } else {
-                    start_new_process(current_process, getClk());
-                    current_process->waiting_time = getClk() - current_process->P.ArrivalTime;
-                    printSchedulerLogFile(current_process, "started");
-                }
-            }
-
-            int rem2 = current_process->RemainingTime;
-            if (rem2 <= 0) rem2 = current_process->P.Runtime;
-            runningProcessStartTime = getClk();
-            runningProcessEndTime = runningProcessStartTime + ((rem2 >= quantum) ? quantum : rem2);
-        }
+        // If RemainingTime <= 0, process will finish naturally
     }
 }
-
 /* Generate performance statistics file */
 void generate_perf_file() {
     double total_wta = 0.0;
@@ -557,11 +539,35 @@ int second_chance_page(){
     return page;
 }
 
-
-int handle_page_fault(struct PCB* p, int vpn, int modify)
+// Mode parameter:
+// any number except 1 = Regular page fault
+// 1 = Initial page table allocation
+int handle_page_fault(struct PCB* p, int vpn, int modify, int mode)
 {
+    int frame;
+
+    /* ---------- MODE 1: INITIAL PAGE TABLE ALLOCATION ---------- */
+    if (mode == 1)
+    {
+        frame = find_free_frame();
+        if (frame == -1)
+            frame = second_chance_page();
+
+            frame_table[frame].free = 0;
+            frame_table[frame].pid = p->P.PID;
+            frame_table[frame].vpn = -1;     // page table, not a data page
+            frame_table[frame].ref = 1;
+            frame_table[frame].modified = 0;
+            p->page_table_frame = frame;
+
+        fprintf(mem_log, "At time %d page table of process %d allocated at frame %d\n", getClk(), p->P.PID, frame);
+
+        fflush(mem_log);
+        return 0;   // do NOT block scheduler
+    }
+
     fprintf(mem_log, "PageFault upon VA %d from process %d", vpn, p->P.PID);
-    int frame = find_free_frame();
+    frame = find_free_frame();
 
     if (frame == -1)
     {
@@ -569,10 +575,18 @@ int handle_page_fault(struct PCB* p, int vpn, int modify)
     
 
         struct Frame* selected_page = &frame_table[frame];
+
+        while (selected_page->vpn == -1)
+        {
+            selected_page->ref = 0;
+            frame = second_chance_page();
+            selected_page = &frame_table[frame];
+        }
+
         struct PCB* selected_page_proc = getPCB(selected_page->pid);
 
         if (selected_page->modified) {
-            fprintf(mem_log, "Swapping out page %d to disk\n", frame);
+            fprintf(mem_log, "Swapping out page %d to disk\n", selected_page->vpn);
         }
 
         selected_page_proc->page_table[selected_page->vpn].valid = 0;
@@ -797,6 +811,20 @@ int main(int argc, char* argv[]) {
             new_proc.P= proc_msg.proc;
             new_proc.orig_ID = proc_msg.proc.PID; //save original ID
 
+            new_proc.num_pages = (new_proc.P.disk_limit + PAGE_SIZE - 1) / PAGE_SIZE;
+
+            new_proc.page_table = malloc(new_proc.num_pages * sizeof(struct PageTableEntry));
+
+            for (int i = 0; i < new_proc.num_pages; i++) {
+            new_proc.page_table[i].valid = 0;
+            new_proc.page_table[i].frame = -1;
+            new_proc.page_table[i].ref = 0;
+            new_proc.page_table[i].modified = 0;
+            }
+
+            handle_page_fault(&new_proc, -1, 0, 1); //initialize new page table vpn = -1
+            handle_page_fault(&new_proc, 0, 0, 0);  //load first page vpn = 0
+
             printf("Received process: PID=%d, Arrival=%d, Runtime=%d at time %d\n",
                    new_proc.P.PID, new_proc.P.ArrivalTime, new_proc.P.Runtime, clock_time);
             fflush(stdout);
@@ -842,11 +870,23 @@ int main(int argc, char* argv[]) {
         /* Run appropriate scheduler */
         if (strcmp(alg_msg.mtext, "SRTN") == 0) {
             SRTN_scheduler(clock_time);
-        } else if (strcmp(alg_msg.mtext, "HPF") == 0) {
+        } 
+        else if (strcmp(alg_msg.mtext, "HPF") == 0) {
             HPF_scheduler(clock_time);
-        } else if (strncmp(alg_msg.mtext, "RR", 2) == 0) {
+        } 
+        else if (strncmp(alg_msg.mtext, "RR", 2) == 0) {
+            struct Node* temp = RR_head;
+            while (temp != NULL) {
+                if (temp->Entry.state == READY &&
+                    current_process->P.PID != temp->Entry.P.PID) {
+                    temp->Entry.waiting_time++;
+                }
+                temp = temp->next;
+                if (temp == RR_head) break; 
+            }
             RR_scheduler(clock_time);
         }
+        
         
 
         /* Termination check */
