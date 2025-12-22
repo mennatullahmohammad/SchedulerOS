@@ -68,7 +68,7 @@ int MMU_access(struct PCB* p) {
 
     char line[64];
     int req_time;
-    int addrbin;
+    char addrbin[32];
     int rw;
 
     //read the next line
@@ -108,6 +108,8 @@ int MMU_access(struct PCB* p) {
         frame_table[frame].modified = 1;
         p->page_table[vpn].modified = 1;
     }
+
+    return 1;
 }
 
 // Get PCB by ID 
