@@ -52,13 +52,65 @@ void generate_perf_file();
 void cleanup_and_exit();
 int second_chance_page();
 int handle_page_fault(struct PCB* p, int vpn, int is_write);
+int MMU_access(struct PCB* p);
 
 /* Memory Management (Phase 2) */
 struct PCB blocked_list[MAX_PROCESSES];
 int blocked_count = 0;
 
 int MMU_access(struct PCB* p) {
-    return 0;   // always OK for now 
+
+    if (!p->req_file) return 0; 
+
+    //time since process strated
+    int time_pstart = getClk() - p->start_time;
+
+    // save current file line 
+    long file_line = ftell(p->req_file); //current pos of the file
+
+    char line[64];
+    int req_time;
+    char addrbin[32];
+    int rw;
+
+    //read the next line
+    if (fgets(line, sizeof(line), p->req_file) == NULL) {
+        return 0; 
+    }
+
+    //skip comments
+    if (line[0] == '#') return 0;
+
+    //Time, Binary Address, R/W Type
+    sscanf(line, "%d %s %c", &req_time, addrbin, &rw);
+
+    //check time
+    if (req_time != time_pstart) {
+        //time didnt come yet
+        fseek(p->req_file, file_line, SEEK_SET);   //rewind line
+        return 0; 
+    }
+
+
+    int virtual_address = strtol(addrbin, NULL, 2);
+    int vpn = virtual_address / PAGE_SIZE;
+    int modified = (rw == 'w');
+
+
+    /* Page fault? */
+    if (p->page_table[vpn].valid == 0) {
+        return handle_page_fault(p, vpn, modified);
+    }
+
+    int frame = p->page_table[vpn].frame;
+    frame_table[frame].ref = 1;
+    p->page_table[vpn].ref = 1;
+
+    if (modified) {
+        frame_table[frame].modified = 1;
+        p->page_table[vpn].modified = 1;
+    }
+    return 0;  
 }
 
 // Get PCB by ID 
@@ -475,7 +527,14 @@ void generate_perf_file() {
 
 void cleanup_and_exit() {
     generate_perf_file();
+    for (int i = 0; i < process_count; i++) {
+        if (all_processes[i].req_file) {
+            fclose(all_processes[i].req_file);
+        }
+    }
+    
     if (msgid != -1) msgctl(msgid, IPC_RMID, NULL);
+    if (mem_log) fclose(mem_log);  
     if (logFile) fclose(logFile);
     destroyClk(true);
     exit(0);
@@ -501,7 +560,7 @@ int second_chance_page(){
 }
 
 
-int handle_page_fault(struct PCB* p, int vpn, int is_write)
+int handle_page_fault(struct PCB* p, int vpn, int modify)
 {
     fprintf(mem_log, "PageFault upon VA %d from process %d", vpn, p->P.PID);
     int frame = find_free_frame();
@@ -509,16 +568,54 @@ int handle_page_fault(struct PCB* p, int vpn, int is_write)
     if (frame == -1)
     {
         frame = second_chance_page();
+    
+
+        struct Frame* selected_page = &frame_table[frame];
+        struct PCB* selected_page_proc = getPCB(selected_page->pid);
+
+        if (selected_page->modified) {
+            fprintf(mem_log, "Swapping out page %d to disk\n", frame);
+        }
+
+        selected_page_proc->page_table[selected_page->vpn].valid = 0;
+    }
+    else {
+        fprintf(mem_log, "Free Physical page %d allocated\n", frame);
     }
 
-    struct Frame* selected_page = &frame_table[frame];
-    struct PCB* selected_page_proc = selected_page->pid;
+    frame_table[frame].free = 0;
+    frame_table[frame].pid = p->P.PID;
+    frame_table[frame].modified = modify;
+    frame_table[frame].ref = 1;
+    frame_table[frame].vpn = vpn;
+
+    p->page_table[vpn].modified = modify;
+    p->page_table[vpn].frame = frame;
+    p->page_table[vpn].valid = 1;
+    p->page_table[vpn].ref = 1;
+
+    fprintf(mem_log, "At time %d page %d for process %d is loaded into memory page %d.\n", getClk(), vpn, p->P.PID, frame);
+
+    fflush(mem_log);
+
+    return 1;   // tell scheduler to BLOCK
+
 }
+
+
 
 int main(int argc, char* argv[]) {
     init_memory(); 
     int generator_done = 0;
     initClk();
+    mem_log = fopen("memory.log", "w");
+    if (!mem_log) {
+        perror("fopen memory.log");
+        destroyClk(true);
+        return 1;
+    }
+    fprintf(mem_log, "#At time x page y for process z is loaded into memory page w.\n");
+    fflush(mem_log);
 
     key_t queue_key = ftok("/tmp", 'M');
     if (queue_key == -1) {
@@ -720,6 +817,17 @@ int main(int argc, char* argv[]) {
             //new_proc.blockedID = -1; it's an array
             new_proc.depp = false;
             new_proc.count = 0; //for blocked array
+            
+            char req_filename[64];
+            snprintf(req_filename, sizeof(req_filename), "requests_%d.txt", new_proc.P.PID);
+            new_proc.req_file = fopen(req_filename, "r");
+            if (!new_proc.req_file) {
+                printf("Warning: Could not open %s\n", req_filename);
+                
+            }
+
+            //handle_page_fault(&new_proc,);
+            //load_first_page(&new_proc);
 
             if (process_count < MAX_PROCESSES)
                 all_processes[process_count++] = new_proc;
