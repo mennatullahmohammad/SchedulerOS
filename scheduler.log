@@ -1,24 +1,22 @@
 #At time x process y state arr w total z remain y wait k
 At time 10 process 1 started arr 10 total 3 remain 3 wait 0
 At time 12 process 1 stopped arr 10 total 3 remain 1 wait 0
-At time 13 process 1 resumed arr 10 total 3 remain 1 wait 1
-At time 14 process 1 finished arr 10 total 3 remain 0 wait 1 TA 4 WTA 1.33
 At time 20 process 2 started arr 20 total 5 remain 5 wait 0
 At time 22 process 2 stopped arr 20 total 5 remain 3 wait 0
-At time 23 process 3 started arr 21 total 30 remain 30 wait 2
-At time 25 process 3 stopped arr 21 total 30 remain 28 wait 2
-At time 25 process 6 resumed arr 20 total 5 remain 3 wait 3
-At time 27 process 6 stopped arr 20 total 5 remain 1 wait 3
-At time 28 process 2 finished arr 20 total 5 remain 0 wait 3 TA 8 WTA 1.60
-At time 28 process 6 started arr 20 total 5 remain 1 wait 8
-At time 30 process 4 started arr 28 total 7 remain 7 wait 2
-At time 32 process 4 stopped arr 28 total 7 remain 5 wait 2
-At time 33 process 4 resumed arr 28 total 7 remain 5 wait 3
-At time 35 process 4 stopped arr 28 total 7 remain 3 wait 3
-At time 36 process 3 resumed arr 21 total 30 remain 28 wait 4
-At time 38 process 3 stopped arr 21 total 30 remain 26 wait 4
-At time 39 process 4 resumed arr 28 total 7 remain 3 wait 7
-At time 40 process 4 finished arr 28 total 7 remain 0 wait 5 TA 12 WTA 1.71
+At time 22 process 3 started arr 21 total 30 remain 30 wait 1
+At time 24 process 3 stopped arr 21 total 30 remain 28 wait 1
+At time 24 process 8 resumed arr 10 total 3 remain 1 wait 3
+At time 25 process 1 finished arr 10 total 3 remain 0 wait 12 TA 15 WTA 5.00
+At time 28 process 4 started arr 28 total 7 remain 7 wait 0
+At time 30 process 4 stopped arr 28 total 7 remain 5 wait 0
+At time 31 process 4 resumed arr 28 total 7 remain 5 wait 1
+At time 33 process 4 stopped arr 28 total 7 remain 3 wait 1
+At time 34 process 2 resumed arr 20 total 5 remain 3 wait 3
+At time 36 process 2 finished arr 20 total 5 remain 0 wait 11 TA 16 WTA 3.20
+At time 36 process 4 resumed arr 28 total 7 remain 3 wait 4
+At time 37 process 4 finished arr 28 total 7 remain 0 wait 2 TA 9 WTA 1.29
+At time 37 process 3 resumed arr 21 total 30 remain 28 wait 5
+At time 39 process 3 stopped arr 21 total 30 remain 26 wait 5
 At time 40 process 3 resumed arr 21 total 30 remain 26 wait 6
 At time 42 process 3 stopped arr 21 total 30 remain 24 wait 6
 At time 43 process 3 resumed arr 21 total 30 remain 24 wait 7

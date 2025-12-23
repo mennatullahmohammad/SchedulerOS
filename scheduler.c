@@ -62,44 +62,54 @@ int MMU_access(struct PCB* p) {
     if (!p->req_file) return 0;
 
     int time_pstart = getClk() - p->start_time;
-    long file_line = ftell(p->req_file);
-
-    char line[64];
-    int req_time;
-    char addrbin[32];
-    char rw;
-
-    if (fgets(line, sizeof(line), p->req_file) == NULL) {
-        return 0;
-    }
-
-    if (line[0] == '#') return 0;
-
-    sscanf(line, "%d %s %c", &req_time, addrbin, &rw);
-
-    if (req_time != time_pstart) {
-        fseek(p->req_file, file_line, SEEK_SET);
-        return 0;
-    }
-
-    int virtual_address = strtol(addrbin, NULL, 2);
-    int vpn = virtual_address / PAGE_SIZE;
-    int modified = (rw == 'w');
-
-    if (p->page_table[vpn].valid == 1) {
-        int frame = p->page_table[vpn].frame;
-        frame_table[frame].ref = 1;
-        p->page_table[vpn].ref = 1;
-
-        if (modified) {
-            frame_table[frame].modified = 1;
-            p->page_table[vpn].modified = 1;
+    
+    // Keep reading until we find a request for current time or pass it
+    while (1) {
+        long file_line = ftell(p->req_file);
+        char line[64];
+        
+        if (fgets(line, sizeof(line), p->req_file) == NULL) {
+            return 0;  // EOF
         }
-        return 0;  
+
+        if (line[0] == '#') continue;  // Skip comments, keep reading
+
+        int req_time;
+        char addrbin[32];
+        char rw;
+        sscanf(line, "%d %s %c", &req_time, addrbin, &rw);
+
+        if (req_time > time_pstart) {
+            // Future request, rewind and wait
+            fseek(p->req_file, file_line, SEEK_SET);
+            return 0;
+        }
+        
+        if (req_time < time_pstart) {
+            // Old request we missed, skip it
+            continue;
+        }
+
+        // req_time == time_pstart, process this request
+        int virtual_address = strtol(addrbin, NULL, 2);
+        int vpn = virtual_address / PAGE_SIZE;
+        int modified = (rw == 'w');
+
+        if (p->page_table[vpn].valid == 1) {
+            int frame = p->page_table[vpn].frame;
+            frame_table[frame].ref = 1;
+            p->page_table[vpn].ref = 1;
+
+            if (modified) {
+                frame_table[frame].modified = 1;
+                p->page_table[vpn].modified = 1;
+            }
+            return 0;  // Hit, no blocking
+        }
+
+        // Page fault
+        return handle_page_fault(p, vpn, modified, 0);
     }
-
-
-    return handle_page_fault(p, vpn, modified, 0);
 }
 
 
