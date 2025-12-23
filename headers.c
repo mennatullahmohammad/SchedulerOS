@@ -125,10 +125,8 @@ struct PCB dequeueRR(struct Node** head, struct Node** tail) {
 }
 
 
-void moveToTail(struct Node* node, struct Node* tail) {
-    // Only call if node ran less than its runtime, ya3ny lw lesa el runtime makhles4 move it
-    if (tail) 
-        tail->next = node;
-    tail = node;
+void moveToTail(struct Node* node, struct Node** tail) {
+    if (*tail) (*tail)->next = node;
+    *tail = node;
     node->next = NULL;
 }

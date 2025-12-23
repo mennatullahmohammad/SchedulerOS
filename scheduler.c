@@ -392,7 +392,15 @@ void RR_scheduler(int current_time) {
     if (current_process->P.PID == -1) {
         if (RR_head != NULL) {
             struct PCB p = dequeueRR(&RR_head, &RR_tail);
-            *current_process = p;
+            struct PCB* master = find_master_by_pid(p.P.PID);
+        if (master && master->start_time != -1) {
+            // Only sync fields that might have changed during blocking
+            p.page_table = master->page_table;
+            p.page_table_frame = master->page_table_frame;
+            p.req_file = master->req_file;
+        }
+        
+        *current_process = p;
 
             if (current_process->start_time == -1) {
                 // First time starting
@@ -703,24 +711,29 @@ int main(int argc, char* argv[]) {
 
         /* Wake up BLOCKED processes */
         for (int i = 0; i < blocked_count; i++) {
-            if (clock_time >= blocked_list[i].unblock_time) {
-                blocked_list[i].blocked = 0;
-                blocked_list[i].state = READY;
+    if (clock_time >= blocked_list[i].unblock_time) {
+        // Get FRESH copy from master
+        struct PCB* master = find_master_by_pid(blocked_list[i].P.PID);
+        if (master) {
+            master->blocked = 0;
+            master->state = READY;
+            master->last_start_time = clock_time;
 
-                if (strncmp(alg_msg.mtext, "RR", 2) == 0) {
-                    enqueueRR(&RR_head, &RR_tail, blocked_list[i]);
-                } else {
-                    Algorithm alg = (strcmp(alg_msg.mtext, "SRTN") == 0) ? ALG_SRTN : ALG_HPF;
-                    enqueue(&ready_queue, &blocked_list[i], alg);
-                }
-
-                for (int j = i; j < blocked_count - 1; j++)
-                    blocked_list[j] = blocked_list[j + 1];
-
-                blocked_count--;
-                i--;
+            if (strncmp(alg_msg.mtext, "RR", 2) == 0) {
+                enqueueRR(&RR_head, &RR_tail, *master);  // Use fresh copy
+            } else {
+                Algorithm alg = (strcmp(alg_msg.mtext, "SRTN") == 0) ? ALG_SRTN : ALG_HPF;
+                enqueue(&ready_queue, master, alg);
             }
         }
+
+        // Remove from blocked list
+        for (int j = i; j < blocked_count - 1; j++)
+            blocked_list[j] = blocked_list[j + 1];
+        blocked_count--;
+        i--;
+    }
+}
         //notification from process that it finished, dont blocl
         struct FinishMsg finish_msg;
         while (msgrcv(msgid, &finish_msg, sizeof(finish_msg), 4, IPC_NOWAIT) != -1) {
@@ -792,24 +805,33 @@ int main(int argc, char* argv[]) {
         
         /* Memory access while RUNNING (Phase 2) */
         if (current_process->state == RUNNING && current_process->P.PID != -1) {
-            int mmu_result = MMU_access(current_process);
+    int mmu_result = MMU_access(current_process);
 
-            if (mmu_result == 1) {
-                printSchedulerLogFile(current_process, "stopped");
-                kill(current_process->P.PID, SIGSTOP);
+    if (mmu_result == 1) {
+    // First, update master with current state
+    struct PCB* master = find_master_by_pid(current_process->P.PID);
+    if (master) {
+        // Copy current state to master
+        master->RemainingTime = current_process->RemainingTime;
+        master->waiting_time = current_process->waiting_time;
+        master->blocked = 1;
+        master->state = BLOCKED;
+        master->unblock_time = clock_time + 10;
+        master->last_start_time = clock_time;
+        
+        printSchedulerLogFile(master, "stopped");
+        kill(master->P.PID, SIGSTOP);
+        
+        // Now copy to blocked_list
+        blocked_list[blocked_count++] = *master;
+    }
 
-                current_process->blocked = 1;
-                current_process->state = BLOCKED;
-                current_process->unblock_time = clock_time + 10;
-
-                blocked_list[blocked_count++] = *current_process;
-
-                current_process->P.PID = -1;
-                current_process->state = READY;
-                runningProcessStartTime = 0;
-                runningProcessEndTime = 0;
-            }
-        }
+    current_process->P.PID = -1;
+    current_process->state = READY;
+    runningProcessStartTime = 0;
+    runningProcessEndTime = 0;
+}
+}
 
         /* Receive new processes */
         struct ProcessMsg proc_msg;
