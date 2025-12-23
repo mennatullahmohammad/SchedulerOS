@@ -105,26 +105,22 @@ void enqueueRR(struct Node** head, struct Node** tail, struct PCB p) {
 
 struct PCB dequeueRR(struct Node** head, struct Node** tail) {
     if (*head == NULL) {
-        struct PCB empty={0}; // queue empty
+        struct PCB empty={0};
         return empty;
     }
 
     struct PCB p = (*head)->Entry;
     struct Node* temp = *head;
     
-    // Only one node left
     if (*head == *tail) {
         *head = NULL;
         *tail = NULL;
-        free(temp);
-        return p;
+    } else {
+        *head = (*head)->next;
+        // REMOVED: (*tail)->next = *head;  ← Don't do this!
     }
     
-    // multiple elements
-    *head = (*head)->next;     // move head
-    (*tail)->next = *head;     // maintain circular
     free(temp);
-
     return p;
 }
 
