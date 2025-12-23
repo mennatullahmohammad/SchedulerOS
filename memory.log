@@ -14,7 +14,10 @@ At time 21 page table of process 3 allocated at frame 4
 PageFault upon VA 0 from process 3
 Free Physical page 5 allocated
 At time 21 page 0 for process 3 is loaded into memory page 5.
-At time 28 page table of process 4 allocated at frame 6
+PageFault upon VA 5 from process 74140
+Free Physical page 6 allocated
+At time 25 page 5 for process 74140 is loaded into memory page 6.
+At time 28 page table of process 4 allocated at frame 7
 PageFault upon VA 0 from process 4
-Free Physical page 7 allocated
-At time 28 page 0 for process 4 is loaded into memory page 7.
+Free Physical page 8 allocated
+At time 28 page 0 for process 4 is loaded into memory page 8.
