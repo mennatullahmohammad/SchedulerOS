@@ -554,7 +554,7 @@ int handle_page_fault(struct PCB* p, int vpn, int modify, int mode)
 {
     int frame;
 
-    /* ---------- MODE 1: INITIAL PAGE TABLE ALLOCATION ---------- */
+    //MODE 1: INITIAL PAGE TABLE ALLOCATION 
     if (mode == 1)
     {
         frame = find_free_frame();
@@ -563,7 +563,7 @@ int handle_page_fault(struct PCB* p, int vpn, int modify, int mode)
 
             frame_table[frame].free = 0;
             frame_table[frame].pid = p->P.PID;
-            frame_table[frame].vpn = -1;     // page table, not a data page
+            frame_table[frame].vpn = -1;     // page table vpn = -1
             frame_table[frame].ref = 1;
             frame_table[frame].modified = 0;
             p->page_table_frame = frame;
@@ -571,7 +571,7 @@ int handle_page_fault(struct PCB* p, int vpn, int modify, int mode)
         fprintf(mem_log, "At time %d page table of process %d allocated at frame %d\n", getClk(), p->P.PID, frame);
 
         fflush(mem_log);
-        return 0;   // do NOT block scheduler
+        return 0;   // doesn't block scheduler
     }
 
     fprintf(mem_log, "PageFault upon VA %d from process %d\n", vpn, p->P.PID);
